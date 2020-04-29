@@ -1,0 +1,9 @@
+.Rhistory
+.Rproj.user/
+*.ipynb
+*.nb.html
+
+.ipynb_checkpoints
+
+cache
+run_results
