@@ -1,0 +1,92 @@
+---
+title: "Patch visualization"
+output: html_notebook
+---
+
+```{r, message=FALSE, warning=FALSE}
+library(Matrix)
+library(pbapply)
+library(magrittr)
+library(tidyverse)
+library(readr)
+library(pheatmap)
+library(CellAnnotatoR)
+library(conos)
+library(pagoda2)
+library(vpscutils)
+
+theme_set(theme_bw())
+```
+
+## Load data
+
+```{r}
+readCounts <- function(path, gene_names) {
+  readMM(path) %>% 
+    set_colnames(paste0("c", 1:ncol(.))) %>% 
+    set_rownames(gene_names) %>% 
+    as("dgCMatrix") %>% .[sort(gene_names),]
+}
+```
+
+```{r, message=FALSE}
+gene_names <- read_csv("../cache/allen_gene_names.csv")$gene
+
+cms <- list.files("../cache/", pattern="allen_neighb_sample_(\\d)+.mm") %>% 
+  file.path("../cache", .) %>% setNames(gsub(".mm", "", substr(., 30, 100))) %>% 
+  pblapply(readCounts, gene_names)
+```
+
+```{r}
+p2 <- GetPagoda(cms$`50`, n.cores=5, min.transcripts.per.cell=1, log.scale=F, graph.k=50, n.odgenes=0,
+                n.pcs=0, embeding.type="UMAP_graph")
+p2$getKnnClusters(method=leiden.community, resolution=8, n.iterations=15, name="leiden_hr")
+```
+
+```{r}
+embeddingPlot(p2$embeddings$counts$UMAP_graph, p2$clusters$counts$leiden)
+embeddingPlot(p2$embeddings$counts$UMAP_graph, p2$clusters$counts$leiden_hr)
+```
+
+## Annotation
+
+```{r}
+cm_norm <- normalizeTfIdfWithFeatures(cms$`50`)
+```
+
+```{r, fig.width=8, fig.height=8}
+clf_data <- getClassificationData(cm_norm, "../metadata/allen_sm_fish_visp_markers.md", prenormalized=T)
+# ann_by_level <- assignCellsByScores(p2$graphs$counts, clf_data, clusters=p2$clusters$counts$leiden_hr, n.cores=5)
+ann_by_level <- assignCellsByScores(NULL, clf_data, clusters=p2$clusters$counts$leiden_hr)
+# ann_by_level <- assignCellsByScores(NULL, clf_data)
+
+plotAnnotationByLevels(p2$embeddings$counts, ann_by_level$annotation, size=0.2, font.size=c(2, 4), shuffle.colors=T)
+```
+
+```{r, fig.width=8, fig.height=8, message=FALSE}
+embeddingPlot(p2$embeddings$counts$UMAP_graph, ann_by_level$annotation$l4,raster=T, raster.dpi=120, font.size=c(4, 6), shuffle.colors=T)
+ggsave("./plots/allen_sm_fish/annotation.pdf")
+```
+
+```{r}
+# plotAssignmentScores(p2$embeddings$counts$UMAP_graph, ann_by_level$scores$l4, clf_data$classification.tree, parent.node="Ex_L5_PI_Grin3a")
+# plotSubtypeMarkers(p2$embeddings$counts$UMAP_graph, p2$counts, clf.data=clf_data, parent.type="Ex_L5_PI_Grin3a", build.panel = F, max.depth = 1)
+```
+
+```{r}
+# sort(gene_names) %>% plotGeneExpression(p2$embeddings$counts$UMAP_graph, p2$counts, build.panel = F)
+```
+
+## Heatmaps
+
+```{r, fig.width=10, fig.height=7}
+t_ann <- sort(ann_by_level$annotation$l4)
+ann_df <- data.frame(L2=t_ann, L1=ann_by_level$annotation$l1[names(t_ann)])
+
+for (n in names(cms)[order(as.integer(names(cms)))]) {
+  cms[[n]][, names(t_ann)] %>% `/`(colSums(.)) %>% as.matrix() %>% `+`(1e-5) %>% log() %>% 
+    pheatmap(cluster_rows=F, cluster_cols=F, show_colnames=F, annotation_col=ann_df, 
+             main=paste0(n, " NNs"), file=paste0("./plots/allen_sm_fish/heatmap_", n, ".png"),
+             width=7, height=5, breaks = seq(-5, 0, length=101), fontsize=8)
+}
+```
