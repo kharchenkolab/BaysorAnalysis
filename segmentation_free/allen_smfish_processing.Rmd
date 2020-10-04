@@ -1,0 +1,97 @@
+---
+title: "Patch visualization"
+output: html_notebook
+---
+
+```{r, message=FALSE, warning=FALSE}
+library(Matrix)
+library(pbapply)
+library(magrittr)
+library(tidyverse)
+library(readr)
+library(pheatmap)
+library(CellAnnotatoR)
+library(conos)
+library(pagoda2)
+library(vpscutils)
+
+theme_set(theme_bw())
+
+DataPath <- function(...) file.path("~/data/spatal/allen_sm_fish/", ...)
+```
+
+## Load data
+
+```{r, message=FALSE}
+spatial_gene_names <- read_csv("../cache/allen_gene_names.csv")$gene
+
+genes_per_id <- DataPath("mouse_VISp_2018-06-14_genes-rows.csv") %>% read_csv() %$% 
+  setNames(gene_symbol, as.character(gene_entrez_id))
+cm <- data.table::fread("~/data/spatal/allen_sm_fish/mouse_VISp_2018-06-14_exon-matrix.csv") %$% 
+  set_rownames(as.data.frame(.[,2:ncol(.)]), make.unique(genes_per_id[as.character(V1)])) %>% 
+  as.matrix() %>% as("dgCMatrix")
+
+metadata_df <- DataPath("mouse_VISp_2018-06-14_samples-columns.csv") %>% 
+  read_csv() %>% filter(!(class %in% c("Low Quality", "No Class", "Endothelial"))) %>% 
+  as.data.frame() %>% set_rownames(.$sample_name)
+
+cm %<>% .[, metadata_df$sample_name]
+
+dim(cm)
+```
+
+```{r}
+p2 <- GetPagoda(cm, n.cores=5, min.transcripts.per.cell=30, log.scale=T, graph.k=50, n.odgenes=1000,
+                n.pcs=100, embeding.type="UMAP_graph")
+```
+
+```{r}
+embeddingPlot(p2$embeddings$PCA$UMAP_graph, p2$clusters$PCA$leiden)
+embeddingPlot(p2$embeddings$PCA$UMAP_graph, metadata_df %$% setNames(class, sample_name))
+embeddingPlot(p2$embeddings$PCA$UMAP_graph, metadata_df %$% setNames(subclass, sample_name))
+```
+
+## Heatmaps
+
+```{r, fig.width=10, fig.height=7}
+plot_cm <- cm[sort(spatial_gene_names),] %>% .[, colSums(.) > 0] %>% `/`(colSums(.)) %>% as.matrix()
+ann_df <- metadata_df %>% as.data.frame() %>% set_rownames(.$sample_name) %>% 
+  .[colnames(plot_cm), c("class", "subclass")] %>% 
+  .[.$class != "Non-Neuronal",] %$% .[order(class, subclass),]
+
+log(plot_cm[, rownames(ann_df)] + 1e-5) %>% 
+  pheatmap(cluster_rows=F, cluster_cols=F, show_colnames=F, annotation=ann_df)
+
+             # file=paste0("./plots/allen_sm_fish/heatmap_", n, ".png"),
+             # width=7, height=5, breaks = seq(-5, 0, length=101), fontsize=8)
+```
+
+```{r}
+cluster_centers <- rownames(p2$counts) %>% split(metadata_df[.,]$subclass) %>% 
+  lapply(function(ns) Matrix::colSums(p2$counts[ns,])[spatial_gene_names]) %$% 
+  set_rownames(Reduce(rbind, .), names(.)) %>% `/`(rowSums(.))
+
+ann_df <- metadata_df %$% split(class, subclass) %>% sapply(unique) %>% 
+  as.data.frame() %>% set_colnames("class") %>% .[order(.$class),,drop=F]
+
+cluster_centers %>% .[rownames(ann_df), sort(colnames(.))] %>% t() %>% 
+  pheatmap(cluster_rows=F, cluster_cols=F, annotation=ann_df)
+
+cluster_centers %>% as_tibble(rownames="subclass") %>% 
+  mutate(class=as.character(ann_df[subclass,])) %>% 
+  select(class, subclass, everything()) %>% 
+  write_csv("../metadata/allen_sm_fish_visp_subclass_centroids.csv")
+```
+
+```{r}
+cluster_centers <- rownames(p2$counts) %>% split(metadata_df[.,]$class) %>% 
+  lapply(function(ns) Matrix::colSums(p2$counts[ns,])[spatial_gene_names]) %$% 
+  set_rownames(Reduce(rbind, .), names(.)) %>% `/`(rowSums(.))
+
+cluster_centers %>% .[, sort(colnames(.))] %>% t() %>% 
+  pheatmap(cluster_rows=F, cluster_cols=F)
+
+cluster_centers %>% as_tibble(rownames="class") %>% 
+  write_csv("../metadata/allen_sm_fish_visp_class_centroids.csv")
+```
+

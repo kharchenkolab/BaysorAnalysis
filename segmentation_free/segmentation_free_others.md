@@ -27,92 +27,11 @@ using DataFramesMeta
 using NearestNeighbors
 using Statistics
 using StatsBase
+
+B = Baysor;
 ```
 
-<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true -->
-## MERFISH MTG
-<!-- #endregion -->
-
-```julia
-@time df_spatial, gene_names = Baysor.load_df("../run_results/merfish_mtg_103/segmentation.csv");
-```
-
-```julia
-grid_step = 5.0
-@time polygons = Baysor.boundary_polygons(df_spatial, df_spatial.cell, grid_step=grid_step, verbose=true, method=:knn);
-```
-
-```julia
-@time neighb_cm = Baysor.neighborhood_count_matrix(df_spatial, 50);
-@time color_transformation = Baysor.gene_composition_transformation(neighb_cm[:, df_spatial.confidence .> 0.95]);
-```
-
-```julia
-# @time mtx_trans = Baysor.transform(color_transformation, neighb_cm);
-# @views mtx_trans .-= minimum(mtx_trans[:, df_spatial.confidence .> 0.9], dims=2)
-# @views mtx_trans ./= maximum(mtx_trans[:, df_spatial.confidence .> 0.9], dims=2);
-# mtx_colors = deepcopy(mtx_trans)
-# mtx_colors[1,:] .*= 100
-# mtx_colors[2:3,:] .-= 0.5
-# mtx_colors[2:3,:] .*= 500
-# gene_colors = vec(mapslices(col -> Colors.Lab(col...), mtx_colors, dims=1));
-
-@time gene_colors = Baysor.gene_composition_colors(neighb_cm, color_transformation; confidences=df_spatial.confidence, color_range=500);
-```
-
-```julia
-Baysor.plot_dataset_colors(df_spatial, gene_colors, polygons=polygons, min_molecules_per_cell=30,
-    min_pixels_per_cell=10, polygon_alpha=0.5)[1]
-```
-
-```julia
-# n_mols_per_cell = Baysor.count_array(df_spatial.cell .+ 1)[2:end]
-# plt_n_mols = Plots.histogram(n_mols_per_cell[(n_mols_per_cell .> 1) .& (n_mols_per_cell .< quantile(n_mols_per_cell, 0.99) / 0.99)], xlabel="Num. molecules per cell", ylabel="Num. cells")
-```
-
-<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true -->
-### Insets
-<!-- #endregion -->
-
-```julia
-module T
-
-using DataFrames
-using DataFramesMeta
-
-import Baysor
-import Plots
-
-function get_plot_inset(df_spatial::DataFrame, min_x::T, max_x::T, min_y::T, max_y::T; target_x::T, target_y::T, grid_step::Float64, upscale::Float64=4.0) where T <: Real
-    subs_df = @where(df_spatial, :x .> min_x, :x .< max_x, :y .> min_y, :y .< max_y)
-    subs_polygons = Baysor.boundary_polygons(subs_df, subs_df.cell, grid_step=grid_step);
-    (px_min, px_max), (py_min, py_max) = [Baysor.val_range(df_spatial[!,s]) for s in (:x, :y)];
-    pwidth, pheight = px_max - px_min, py_max - py_min
-
-    nw, nh = min.([upscale * (max_x - min_x) / pwidth, upscale * (max_y - min_y) / pheight], 1.0);
-    inset = Plots.bbox((target_x - px_min) / pwidth, (target_y - py_min) / pheight, nw, nh, :bottom, :left);
-    return subs_df, subs_polygons, (1, inset)
-end
-
-end
-```
-
-```julia
-subs_df1, subs_polygons1, inset1 = T.get_plot_inset(df_spatial, -3500, -3000, -500, -200; target_x=-2500, target_y=-3000, grid_step=grid_step);
-subs_df2, subs_polygons2, inset2 = T.get_plot_inset(df_spatial, 400, 900, 0, 200; target_x=-200, target_y=-1400, grid_step=grid_step);
-
-insets = [inset1, inset2]
-
-plt = Baysor.plot_dataset_colors(df_spatial, gene_colors, min_molecules_per_cell=30, inset=insets)[1]
-
-Baysor.plot_cell_borders_polygons!(subs_df1, subs_polygons1, color=subs_df1.color,
-    xaxis=false, yaxis=false, subplot=2)
-
-Baysor.plot_cell_borders_polygons!(subs_df2, subs_polygons2, color=subs_df2.color,
-    xaxis=false, yaxis=false, subplot=3)
-```
-
-<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true -->
+<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true -->
 ## MERFISH Hippocampus
 <!-- #endregion -->
 
@@ -206,7 +125,7 @@ mol_clust8_t.result
 Baysor.plot_cell_borders_polygons(cur_df, annotation=mol_clust8.assignment, ms=1.0)
 ```
 
-<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true -->
+<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true -->
 ## ISS Mouse
 <!-- #endregion -->
 
@@ -328,7 +247,7 @@ GF = Gadfly;
 ```
 
 ```julia
-@time df_spatial, gene_names = Baysor.load_df("../run_results/allen_smfish/segmentation.csv");
+@time df_spatial, gene_names = Baysor.load_df("../run_results/spacejam2/allen_sm_fish/no_dapi/segmentation.csv");
 df_spatial[!, :x] = round.(Int, 10 .* (df_spatial.x .- minimum(df_spatial.x)));
 df_spatial[!, :y] = round.(Int, 10 .* (df_spatial.y .- minimum(df_spatial.y)));
 length(gene_names)
@@ -344,20 +263,76 @@ length(gene_names)
 ```
 
 ```julia
-@time Baysor.append_confidence!(df_spatial, nn_id=16);
-@time adjacent_points, adjacent_weights = Baysor.build_molecule_graph(df_spatial, filter=false);
+df_spatial[!, :color] = gene_colors;
 ```
 
 ```julia
-# plt = Baysor.plot_cell_borders_polygons(df_spatial, color=gene_colors, ms=1.0, size=(1500, 1500), xlims=(1800, 23300), ylims=(1500, 21000), xlabel="X", ylabel="Y")
-plt = Baysor.plot_cell_borders_polygons(df_spatial, color=gene_colors, ms=1.0, xlims=(5000, 18000), ylims=(2500, 15500), size=(1500, 1500), xlabel="X", ylabel="Y")
-Plots.savefig("./plots/allen_sm_fish/gene_coloring.png")
+# @time Baysor.append_confidence!(df_spatial, nn_id=16);
+# @time adjacent_points, adjacent_weights = Baysor.build_molecule_graph(df_spatial, filter=false);
+```
 
+### Coloring examples
+
+```julia
+sub_lims = [((15000, 17000), (7000, 9000)), ((11000, 14000), (12000, 15000)), ((8000, 9000), (12000, 13000)), ((11900, 12400), (9400, 10000)), ((12100, 12270), (9700, 9900))];
+```
+
+```julia
+plt = Baysor.plot_cell_borders_polygons(df_spatial, color=gene_colors, ms=1.0, xlims=(5000, 18000), ylims=(2500, 15500), size=(1500, 1500), xlabel="X", ylabel="Y", ticks=false)
+for ((xs, xe), (ys, ye)) in sub_lims
+    Plots.plot!([xs, xs, xe, xe, xs], [ys, ye, ye, ys, ys], color="black", label="", lw=3.0, alpha=0.75)
+end
+
+Plots.savefig("./plots/allen_sm_fish/gene_coloring.png")
 plt
 ```
 
+```julia
+for (i,((xs, xe), (ys, ye))) in enumerate(sub_lims[1:(end-1)])
+    plt = Baysor.plot_cell_borders_polygons(@where(df_spatial, :x .>= xs, :x .<= xe, :y .>= ys, :y .<= ye), color=:color, ms=2.5, 
+        size=(xe - xs, ye - ys) ./ 3, ticks=false) # , xlabel="X", ylabel="Y"
+    Plots.savefig("./plots/allen_sm_fish/gene_coloring_e$(i).png")
+    display(plt)
+end
+```
+
+### Method scheme
+
+```julia
+sub_lims = [((15000, 17000), (7000, 9000)), ((11000, 14000), (12000, 15000)), ((8000, 9000), (12000, 13000)), ((11900, 12400), (9400, 10000)), 
+    ((12150, 12250), (9720, 9900))];
+
+(xs,xe), (ys,ye) = sub_lims[end]
+
+p_df = @where(df_spatial, :x .>= xs, :x .<= xe, :y .>= ys, :y .<= ye);
+p_df = @where(p_df, (B.count_array(:gene)[:gene] .> 16) .& (B.count_array(:gene)[:gene] .< 100), .!in.(gene_names[:gene], Ref(["Mpped1"])))
+x_ticks = (xs:50:xe, "")
+y_ticks = (ys:50:ye, "")
+
+p_size = (xe - xs, ye - ys) .* 2
+plt1 = B.plot_cell_borders_polygons(p_df, annotation=gene_names[p_df.gene], ms=5, size=p_size, legend=:bottomright, xticks=x_ticks, yticks=y_ticks)
+plt2 = B.plot_cell_borders_polygons(p_df, color=:color, ms=5, size=p_size, xticks=x_ticks, yticks=y_ticks)
+
+# B.plot_cell_borders_polygons(p_df, annotation=gene_names[p_df.gene], ms=5, size=(500, 1000), legend=:bottomright, xticks=x_ticks, yticks=y_ticks)
+# Plots.annotate!(p_df.x, p_df.y, 1:size(p_df, 1))
+
+t_pos_data = B.position_data(p_df);
+t_id = 103
+t_pd = t_pos_data[:, knn(KDTree(t_pos_data), t_pos_data[:,[t_id]], 16, true)[1][1][2:end]];
+for pl in [plt1, plt2]
+    for col in eachcol(t_pd)
+        Plots.plot!(pl, [col[1], t_pos_data[1,t_id]], [col[2], t_pos_data[2,t_id]], label="", color="black", lw=1.5)
+    end
+end
+
+Plots.savefig(plt1, "./plots/allen_sm_fish/knns_genes.pdf")
+Plots.savefig(plt2, "./plots/allen_sm_fish/knns_expr.pdf")
+
+Plots.plot(plt1, plt2, size=(p_size[1] * 2, p_size[2]))
+```
+
 <!-- #region toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true -->
-### Patches
+### Local Expression Vectors
 <!-- #endregion -->
 
 ```julia
@@ -445,7 +420,7 @@ Plots.savefig("./plots/allen_sm_fish/patches_heatmaps.pdf")
 plt
 ```
 
-<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true -->
+<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true -->
 #### Attempts to show border effect
 <!-- #endregion -->
 
@@ -533,10 +508,17 @@ plot_ids = findall(.!isnan.(mix_frac_per_vec[1]));
 #     ms=1.0, xlims=(5000, 18000), ylims=(2500, 15500), size=(1500, 1500), xlabel="X", ylabel="Y", noise_ann="other", noise_kwargs=Dict(:ms => 0.1, :alpha => 0.01))
 ```
 
+<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true -->
 #### Different number of NNs
+<!-- #endregion -->
 
 ```julia
-sample_ids = Baysor.select_ids_uniformly(df_spatial.x, df_spatial.y, df_spatial.confidence, 20000)
+sample_ids = Baysor.select_ids_uniformly(df_spatial.x, df_spatial.y, df_spatial.confidence, n=20000);
+
+coord_df = deepcopy(df_spatial[sample_ids, 2:end]);
+coord_df[!, :gene] = gene_names[coord_df.gene];
+CSV.write("../cache/allen_coord_df.csv", coord_df);
+p
 @showprogress for nn in [5, 50, 300, 500, 2000]
     neighb_cm = Baysor.neighborhood_count_matrix(df_spatial, nn, normalize=false);
     mmwrite("../cache/allen_neighb_$nn.mm", SparseMatrixCSC(neighb_cm))
@@ -546,7 +528,7 @@ end
 CSV.write("../cache/allen_gene_names.csv", DataFrame([gene_names], [:gene]));
 ```
 
-<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true -->
+<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true -->
 #### Visualizations
 <!-- #endregion -->
 
@@ -634,7 +616,9 @@ patch_ord = hclust(patch_dists, linkage=:ward).order;
 Plots.heatmap(neighb_cm[gene_ord, mol_ids[patch_ord]], yticks=(1:length(gene_names), gene_names[gene_ord]))
 ```
 
+<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true -->
 ### Clustering
+<!-- #endregion -->
 
 ```julia
 confidence_nn_id = Baysor.default_param_value(:confidence_nn_id, 30);
@@ -646,36 +630,12 @@ adjacent_points, adjacent_weights = Baysor.build_molecule_graph(df_spatial, filt
 ```
 
 ```julia
-import NMF
-
-w, h = NMF.nndsvd(cor_mat, 8, variant=:std);
-Baysor.clustermap(w, gene_names)[1]
-```
-
-```julia
-Baysor.clustermap(mol_clust6.exprs', gene_names)[1]
-```
-
-```julia
-@time Baysor.plot_transcript_assignment_panel(df_spatial, df_spatial.cell, nothing, 
-    Dict("gene-composition-neigborhood" => 30, "min-pixels-per-cell" => 15, "scale" => 6.5, "output" => "./", "min-molecules-per-cell" => 30))
-```
-
-```julia
 @time polygons = Baysor.boundary_polygons(df_spatial, df_spatial.cell; grid_step=2.0, bandwidth=6.5);
 ```
 
-```julia
-Baysor.plot_cell_borders_polygons(df_spatial, polygons, annotation=mol_clust6_3.assignment, ms=1.0, size=(2000, 2000))
-```
-
-```julia
-sqrt(size(df_spatial, 1) / 30)
-```
-
-```julia
-sqrt(size(df_spatial, 1) / 30) / 15 * 2
-```
+<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true -->
+#### 6 clusters
+<!-- #endregion -->
 
 ```julia
 @time mol_clust6_3 = Baysor.cluster_molecules_on_mrf(df_spatial.gene, adjacent_points, adjacent_weights, df_spatial.confidence;
@@ -722,7 +682,7 @@ Baysor.plot_cell_borders_polygons(df_spatial, annotation=mol_clust6.assignment, 
 Baysor.plot_cell_borders_polygons(df_spatial, annotation=mol_clust6.assignment, ms=1.0)
 ```
 
-<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true -->
+<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true -->
 #### 4 clusters
 <!-- #endregion -->
 
@@ -734,7 +694,7 @@ Baysor.plot_cell_borders_polygons(df_spatial, annotation=mol_clust6.assignment, 
 Baysor.plot_cell_borders_polygons(df_spatial, annotation=mol_clust4.assignment, ms=1.0)
 ```
 
-<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true -->
+<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true -->
 #### 8 clusters
 <!-- #endregion -->
 
@@ -855,8 +815,9 @@ plt
 # offset = 10
 # t_palette = vcat(reverse(Colors.sequential_palette(10, n1 + offset)[offset:end]), Colors.sequential_palette(250, 100 + offset - n1)[offset:end]);
 
-t_palette = reverse(Colors.sequential_palette(10, 100)[50:end]);
-dist_colors = Baysor.map_to_colors(mean_dists, palette=t_palette);
+# t_palette = reverse(Colors.sequential_palette(10, 100)[50:end]);
+# dist_colors = Baysor.map_to_colors(mean_dists, palette=t_palette);
+dist_colors = B.map_to_colors(mean_dists, palette=Colors.diverging_palette(10, 250, s=0.75, w=1.0))
 plt = Baysor.plot_colorbar(dist_colors, lw=0.0, xlims=(0, maximum(mean_dists)), xlabel="Distance to 16'th nearest neighbor", size=(500, 200))
 Plots.savefig("./plots/allen_sm_fish/distance_colorbar.pdf")
 plt
@@ -868,20 +829,12 @@ df_spatial[!, :gene_color] = gene_colors;
 ```
 
 ```julia
-cur_df = @where(df_spatial, :x .> 10000, :x .< 15000, :y .> 10000, :y .< 15000);
-size(cur_df)
-```
+cur_df = @where(df_spatial, :x .>= 10000, :x .<= 12500, :y .>= 12500, :y .<= 15000);
 
-```julia
-# cur_df = @where(df_spatial, :x .> 10000, :x .< 11000, :y .> 14000, :y .< 15000);
-# size(cur_df)
-```
+@time polygons = Baysor.boundary_polygons(cur_df, (cur_df.confidence .>= 0.25) .+ 1, grid_step=2.0, shape_method=:order, max_dev=30.0,
+    bandwidth=8.0, exclude_labels=[1], dens_threshold=1e-8, min_border_length=30);
 
-```julia
-@time polygons = Baysor.boundary_polygons(cur_df, (cur_df.confidence .>= 0.25) .+ 1, grid_step=2.0, method=:kde, shape_method=:order, max_dev=30.0,
-    bandwidth=2.0, exclude_labels=[1], dens_threshold=1e-8, min_border_length=30);
-
-plt = Baysor.plot_cell_borders_polygons(cur_df, polygons, color=cur_df.color, ms=1.5, alpha=0.4)
+plt = Baysor.plot_cell_borders_polygons(cur_df, polygons, color=cur_df.color, ms=2.5, alpha=0.4, size=(500, 500), ticks=false)
 Plots.savefig("./plots/allen_sm_fish/distance_per_transcript.png")
 plt
 ```
@@ -901,12 +854,12 @@ Baysor.append_confidence!(df_spatial, nn_id=16);
 ```
 
 ```julia
-@time adjacent_points, adjacent_weights = Baysor.build_molecule_graph(df_spatial, filter=false);
+@time adjacent_points, adjacent_weights = Baysor.build_molecule_graph(df_spatial, filter=false, adjacency_type=:both, k_adj=30);
 ```
 
 ```julia
 centroid_df = CSV.read("../metadata/allen_sm_fish_visp_subclass_centroids.csv");
-centroid_df = @where(centroid_df, :class .!= "Non-Neuronal", .!in.(:subclass, Ref(["CR", "Sncg", "Meis2", "Serpinf1"])));
+centroid_df = @where(centroid_df, :class .!= "Non-Neuronal", .!in.(:subclass, Ref(["CR", "NP", "Meis2", "Serpinf1"]))); # Sncg
 centroid_exprs = Matrix(centroid_df[:, Symbol.(gene_names)]);
 
 size(centroid_exprs)
@@ -923,15 +876,38 @@ Baysor.maximize_molecule_clusters!(expr_obs, expr_obs, df_spatial.gene, df_spati
 ```
 
 ```julia
+exprs_norm = copy((type_transfer_init.exprs ./ sum(type_transfer_init.exprs, dims=1))');
+gene_ord = sortperm(vec(mapslices(x -> findmax(x)[2], exprs_norm, dims=2)), rev=true);
+B.clustermap(exprs_norm, gene_names, 
+    gene_ord=gene_ord, cell_ord=1:size(type_transfer_init.exprs, 1),
+    xticks=(1:size(type_transfer_init.exprs, 1), centroid_df.subclass), color=:OrRd_9
+)[1]
+```
+
+```julia
+exprs_norm = copy((type_transfer_init.exprs ./ sum(type_transfer_init.exprs, dims=1))');
+B.clustermap(exprs_norm, gene_names, 
+    gene_ord=1:length(gene_names), cell_ord=1:size(type_transfer_init.exprs, 1),
+    xticks=(1:size(type_transfer_init.exprs, 1), centroid_df.subclass), color=:OrRd_9
+)[1]
+```
+
+```julia
+B.clustermap((type_transfer_init.exprs ./ sum(type_transfer_init.exprs, dims=1))', gene_names, cell_ord=1:size(type_transfer_init.exprs, 1),
+    xticks=(1:size(type_transfer_init.exprs, 1), centroid_df.subclass), color=:OrRd_9
+)[1]
+```
+
+```julia
 gene_ord = sortperm(gene_names, rev=true)
 Plots.heatmap((type_transfer_init.exprs')[gene_ord, :], yticks=(1:length(gene_names), gene_names[gene_ord]), 
-    xticks=(1:size(type_transfer_init.exprs, 1), centroid_df.subclass), size=(550, 400))
+    xticks=(1:size(type_transfer_init.exprs, 1), centroid_df.subclass), size=(550, 400), color=:OrRd_9)
 ```
 
 ```julia
 gene_ord = sortperm(gene_names, rev=true)
 plt = Plots.heatmap((expr_obs')[gene_ord, :], yticks=(1:length(gene_names), gene_names[gene_ord]), 
-    xticks=(1:size(expr_obs, 1), centroid_df.subclass), size=(550, 400))
+    xticks=(1:size(expr_obs, 1), centroid_df.subclass), size=(550, 400), color=:OrRd_9)
 
 Plots.savefig("./plots/allen_sm_fish/cell_type_centers.png")
 plt

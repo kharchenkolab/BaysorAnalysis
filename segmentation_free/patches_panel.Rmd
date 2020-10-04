@@ -38,14 +38,16 @@ cms <- list.files("../cache/", pattern="allen_neighb_sample_(\\d)+.mm") %>%
 ```
 
 ```{r}
-p2 <- GetPagoda(cms$`50`, n.cores=5, min.transcripts.per.cell=1, log.scale=F, graph.k=50, n.odgenes=0,
-                n.pcs=0, embeding.type="UMAP_graph")
-p2$getKnnClusters(method=leiden.community, resolution=8, n.iterations=15, name="leiden_hr")
+p2_lv <- GetPagoda(cms$`50`, n.cores=5, min.transcripts.per.cell=1, log.scale=F, graph.k=50, n.odgenes=0,
+                   n.pcs=0, embeding.type="UMAP_graph", min.dist=0.3)
+p2_lv$getKnnClusters(method=leiden.community, resolution=8, n.iterations=15, name="leiden_hr")
 ```
 
-```{r}
-embeddingPlot(p2$embeddings$counts$UMAP_graph, p2$clusters$counts$leiden)
-embeddingPlot(p2$embeddings$counts$UMAP_graph, p2$clusters$counts$leiden_hr)
+```{r, fig.width=8, fig.height=4}
+cowplot::plot_grid(
+  embeddingPlot(p2_lv$embeddings$counts$UMAP_graph, p2_lv$clusters$counts$leiden),
+  embeddingPlot(p2_lv$embeddings$counts$UMAP_graph, p2_lv$clusters$counts$leiden_hr)
+)
 ```
 
 ## Annotation
@@ -55,38 +57,105 @@ cm_norm <- normalizeTfIdfWithFeatures(cms$`50`)
 ```
 
 ```{r, fig.width=8, fig.height=8}
-clf_data <- getClassificationData(cm_norm, "../metadata/allen_sm_fish_visp_markers.md", prenormalized=T)
-# ann_by_level <- assignCellsByScores(p2$graphs$counts, clf_data, clusters=p2$clusters$counts$leiden_hr, n.cores=5)
-ann_by_level <- assignCellsByScores(NULL, clf_data, clusters=p2$clusters$counts$leiden_hr)
-# ann_by_level <- assignCellsByScores(NULL, clf_data)
+clf_data <- getClassificationData(cm_norm, "../metadata/visp_allen_sm_fish.md", prenormalized=T)
+ann_by_level <- assignCellsByScores(NULL, clf_data, clusters=p2_lv$clusters$counts$leiden_hr)
+ann_by_level$annotation$l1[ann_by_level$annotation$l3 == "Noise"] <- "Noise"
 
-plotAnnotationByLevels(p2$embeddings$counts, ann_by_level$annotation, size=0.2, font.size=c(2, 4), shuffle.colors=T)
+plotAnnotationByLevels(p2_lv$embeddings$counts, ann_by_level$annotation, size=0.2, font.size=c(2, 4), shuffle.colors=T, min.cluster.size=10)
+```
+
+```{r}
+sort(gene_names) %>% plotGeneExpression(p2_lv$embeddings$counts$UMAP_graph, p2_lv$counts, build.panel=F)
 ```
 
 ```{r, fig.width=8, fig.height=8, message=FALSE}
-embeddingPlot(p2$embeddings$counts$UMAP_graph, ann_by_level$annotation$l4,raster=T, raster.dpi=120, font.size=c(4, 6), shuffle.colors=T)
+l3_ann <- ann_by_level$annotation %$% l3[order(l1, l3)]
+# l3_colors <- sample(rainbow(length(unique(l3_ann)))) %>% setNames(unique(l3_ann))
+set.seed(43)
+l3_colors <- sample(scales::hue_pal(h=c(50, 360), c=100, l=60)(length(unique(l3_ann)))) %>% setNames(unique(l3_ann))
+# l3_colors <- sample(colorRampPalette(ggsci::pal_jco()(10))(length(unique(l3_ann)))) %>% setNames(unique(l3_ann))
+
+sccore::embeddingPlot(p2_lv$embeddings$counts$UMAP_graph, ann_by_level$annotation$l3, raster=T, 
+                      raster.dpi=120, font.size=c(5, 12)) +
+  scale_color_manual(values=l3_colors)
 ggsave("./plots/allen_sm_fish/annotation.pdf")
 ```
 
-```{r}
-# plotAssignmentScores(p2$embeddings$counts$UMAP_graph, ann_by_level$scores$l4, clf_data$classification.tree, parent.node="Ex_L5_PI_Grin3a")
-# plotSubtypeMarkers(p2$embeddings$counts$UMAP_graph, p2$counts, clf.data=clf_data, parent.type="Ex_L5_PI_Grin3a", build.panel = F, max.depth = 1)
+```{r, fig.width=5, fig.height=1.5, message=FALSE, warning=FALSE}
+gg <- sccore::embeddingPlot(p2_lv$embeddings$counts$UMAP_graph, ann_by_level$annotation$l3,
+                      show.legend=T, legend.position="bottom") +
+  scale_color_manual(values=l3_colors) +
+  guides(color=guide_legend(direction="horizontal", nrow=5, title="L2", override.aes=list(alpha=1.0, size=6, shape=15))) +
+  theme(legend.text=element_text(size=14), legend.title=element_text(size=16))
+
+cowplot::plot_grid(cowplot::get_legend(gg))
+ggsave("./plots/allen_sm_fish/color_legend_l2.pdf")
+```
+
+```{r, fig.width=1.5, fig.height=1, message=FALSE, warning=FALSE}
+l1_colors <- list(Ex="#ff9289", Inh="#00da89", Noise="#f7a900")
+gg <- sccore::embeddingPlot(p2_lv$embeddings$counts$UMAP_graph, ann_by_level$annotation$l1,
+                      show.legend=T, legend.position="bottom") +
+  scale_color_manual(values=l1_colors) +
+  guides(color=guide_legend(direction="horizontal", nrow=3, title="L1", override.aes=list(alpha=1.0, size=6, shape=15))) +
+  theme(legend.text=element_text(size=14), legend.title=element_text(size=16))
+
+cowplot::plot_grid(cowplot::get_legend(gg))
+ggsave("./plots/allen_sm_fish/color_legend_l1.pdf")
+```
+
+```{r, fig.width=10, fig.height=10, message=FALSE}
+coord_df <- read_csv("../cache/allen_coord_df.csv") %>% as.data.frame() %>% 
+  set_rownames(names(ann_by_level$annotation$l3))
+
+sccore::embeddingPlot(coord_df, groups=ann_by_level$annotation$l3, 
+              subgroups=unique(ann_by_level$annotation$l3[(ann_by_level$annotation$l1 == "Ex") & (ann_by_level$annotation$l3 != "Noise")]), size=1.5,
+              show.legend=T, shuffle.colors=T, legend.position=c(0.99, 0.99), raster=T, raster.dpi=120, font.size=c(5, 10)) +
+  scale_x_continuous(limits=c(10000, 20000), expand=c(0, 0)) + 
+  scale_y_continuous(limits=c(4000, 14000), expand=c(0, 0)) + 
+  scale_color_manual(name="Type", values=l3_colors) +
+  guides(color=guide_legend(label.theme=element_text(size=14), override.aes=list(size=3, alpha=1), title.theme=element_text(size=16)))
+
+ggsave("./plots/allen_sm_fish/annotation_ex_space.pdf")
 ```
 
 ```{r}
-# sort(gene_names) %>% plotGeneExpression(p2$embeddings$counts$UMAP_graph, p2$counts, build.panel = F)
+# plotAssignmentScores(p2_lv$embeddings$counts$UMAP_graph, ann_by_level$scores$l4, clf_data$classification.tree, parent.node="Ex_L5_PI_Grin3a")
+# plotSubtypeMarkers(p2_lv$embeddings$counts$UMAP_graph, p2_lv$counts, clf.data=clf_data, parent.type="Ex_L5_PI_Grin3a", build.panel = F, max.depth = 1)
 ```
 
 ## Heatmaps
 
-```{r, fig.width=10, fig.height=7}
-t_ann <- sort(ann_by_level$annotation$l4)
-ann_df <- data.frame(L2=t_ann, L1=ann_by_level$annotation$l1[names(t_ann)])
+```{r, fig.width=7, fig.height=5}
+ann_df <- data.frame(L2=l3_ann, L1=as.character(ann_by_level$annotation$l1[names(l3_ann)]), stringsAsFactors=F)
+t_cm <- cms[[5]] %>% `/`(colSums(.)) %>% as.matrix() %>% `+`(1e-2) %>% log10() %>% `-`(min(.)) %>% `/`(max(.))
 
-for (n in names(cms)[order(as.integer(names(cms)))]) {
-  cms[[n]][, names(t_ann)] %>% `/`(colSums(.)) %>% as.matrix() %>% `+`(1e-5) %>% log() %>% 
-    pheatmap(cluster_rows=F, cluster_cols=F, show_colnames=F, annotation_col=ann_df, 
-             main=paste0(n, " NNs"), file=paste0("./plots/allen_sm_fish/heatmap_", n, ".png"),
-             width=7, height=5, breaks = seq(-5, 0, length=101), fontsize=8)
+t_ord <- split(names(l3_ann), l3_ann) %>% 
+  pblapply(function(ns) if (length(ns) > 2) ns[hclust(as.dist(1-cor(as.matrix(t_cm[, ns]))), method="ward.D")$order] else ns) %>% 
+  .[unique(ann_df$L2)] %>% Reduce(c, .)
+
+pheatmap(t_cm[, t_ord], cluster_rows=F, cluster_cols=F, show_colnames=F, annotation_col=ann_df, 
+         breaks = seq(0, 1, length=101), width=7, height=5, fontsize=10, fontsize_row=12, 
+         annotation_colors=list(L2=l3_colors))
+```
+
+```{r, fig.width=7, fig.height=5}
+t_cm <- cms[[4]] %>% `/`(colSums(.)) %>% as.matrix() %>% `+`(1e-2) %>% log10() %>% `+`(5) %>% `/`(5)
+
+# pheatmap(t_cm[, t_ord], cluster_rows=F, cluster_cols=F, show_colnames=F, annotation_col=ann_df, 
+#          breaks = seq(0, 1, length=101), width=7, height=5, fontsize=14, 
+#          annotation_colors=list(L2=l3_colors))
+
+for (n in names(cms)[order(as.integer(names(cms)))] %>% setdiff("300")) {
+  t_cm <- cms[[n]] %>% `/`(colSums(.)) %>% as.matrix() %>% `+`(1e-2) %>% log10() %>% `-`(min(.)) %>% `/`(max(.))
+  t_ord <- split(names(l3_ann), l3_ann) %>% 
+    pblapply(function(ns) if (length(ns) > 2) ns[hclust(as.dist(1-cor(as.matrix(t_cm[, ns]))), method="ward.D")$order] else ns) %>% 
+    .[unique(ann_df$L2)] %>% Reduce(c, .)
+  
+  pheatmap(t_cm[, t_ord], cluster_rows=F, cluster_cols=F, show_colnames=F, annotation_col=ann_df, 
+           breaks = seq(0, 1, length=101),
+           file=paste0("./plots/allen_sm_fish/heatmap_", n, ".pdf"),
+           main=paste0(n, " NNs"), width=7, height=5, fontsize=10, fontsize_row=12, treeheight_row=0,
+           annotation_colors=list(L2=l3_colors))
 }
 ```
