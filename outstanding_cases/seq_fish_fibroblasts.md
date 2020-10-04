@@ -36,7 +36,7 @@ gene_names = vec(String.(MAT.matread(COORD_PATH * "all_gene_Names.mat")["allName
 @time rna_locations_run_1 = Array{Float64, 2}.(MAT.matread(COORD_PATH * "RNA_locations_run_1.mat")["tot"]);
 # @time rna_locations_run_2 = Array{Float64, 2}.(MAT.matread(COORD_PATH * "RNA_locations_run_2.mat")["tot"]);
 
-size(rna_locations_run_1), size(rna_locations_run_2)
+size(rna_locations_run_1)#, size(rna_locations_run_2)
 ```
 
 ```julia
@@ -93,6 +93,14 @@ size(df_spatial)
 ```
 
 ```julia
+mean(length.(B.split(df_spatial.gene, denserank(df_spatial.cell))))
+```
+
+```julia
+mean(length.(unique.(B.split(df_spatial.gene, denserank(df_spatial.cell)))))
+```
+
+```julia
 expressed_genes = findall(B.count_array(df_spatial.gene) .> 50)
 gene_names = gene_names[expressed_genes]
 df_spatial = @where(df_spatial, in.(:gene, Ref(Set(expressed_genes))));
@@ -103,11 +111,11 @@ size(df_spatial)
 ```julia
 @time neighb_cm = B.neighborhood_count_matrix(df_spatial, 500);
 @time color_transformation = B.gene_composition_transformation(neighb_cm, n_pcs=50);
-@time gene_colors = B.gene_composition_colors(neighb_cm, color_transformation; color_range=200);
+@time gene_colors = B.gene_composition_colors(neighb_cm, color_transformation);
 ```
 
 ```julia
-B.plot_cell_borders_polygons(df_spatial, color=gene_colors, size=(600, 600))
+B.plot_cell_borders_polygons(df_spatial, color=gene_colors, size=(600, 600), ticks=false)
 ```
 
 ```julia
@@ -138,7 +146,7 @@ B.bmm!(bm_data, n_iters=500, new_component_frac=0.3, min_molecules_per_cell=1000
 ```julia
 assignment = B.estimate_assignment_by_history(bm_data)[1];
 assignment[B.count_array(assignment .+ 1)[assignment .+ 1] .< 500] .= 0;
-B.plot_cell_borders_polygons(df_spatial, annotation=assignment, alpha=0.5, noise_ann=0)
+B.plot_cell_borders_polygons(df_spatial, annotation=assignment, alpha=0.5, noise_ann=0, ticks=false)
 ```
 
 ```julia
@@ -146,8 +154,9 @@ polygons = B.boundary_polygons(df_spatial, assignment, grid_step=3.0, bandwidth=
 polygons_paper = B.boundary_polygons(df_spatial, df_spatial.cell, grid_step=3.0, bandwidth=1.0, dens_threshold=1e-7, min_border_length=100);
 
 poly_width = 2.0
-plt1 = B.plot_cell_borders_polygons(df_spatial, polygons_paper, color=gene_colors, polygon_line_width=poly_width);
-plt2 = B.plot_cell_borders_polygons(df_spatial, polygons, annotation=assignment, legend=:none, alpha=0.5, noise_ann=0, size=(400, 400), polygon_line_width=poly_width)
+plt1 = B.plot_cell_borders_polygons(df_spatial, polygons_paper, color=gene_colors, polygon_line_width=poly_width, ticks=false, xlabel="X", ylabel="Y");
+plt2 = B.plot_cell_borders_polygons(df_spatial, polygons, annotation=assignment, legend=:none, alpha=0.5, noise_ann=0, size=(400, 400), 
+    polygon_line_width=poly_width, ticks=false, xlabel="X", ylabel="Y")
 plt = Plots.plot(plt1, plt2, size=(800, 400), format=:png)
 Plots.savefig(plt, "./plots/seq_fish_fibroblasts.png")
 plt
