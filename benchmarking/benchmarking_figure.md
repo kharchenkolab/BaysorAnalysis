@@ -13,7 +13,7 @@ jupyter:
     name: julia-1.3
 ---
 
-```julia
+```julia execution={"iopub.status.busy": "2020-09-10T11:00:01.198000+02:00", "iopub.execute_input": "2020-09-10T11:00:01.198000+02:00", "iopub.status.idle": "2020-09-10T11:00:42.736000+02:00"}
 import Baysor
 import Colors
 import CSV
@@ -42,15 +42,15 @@ PROJECT_DIR = "/home/vpetukhov/spatial/Benchmarking/";
 PLOT_DIR = "./plots/joint_fig/";
 ```
 
-```julia
+```julia execution={"iopub.status.busy": "2020-09-10T11:00:42.736000+02:00", "iopub.execute_input": "2020-09-10T11:00:45.693000+02:00", "iopub.status.idle": "2020-09-10T11:00:48.748000+02:00"}
 Plots.theme(:wong); # :mute, :vibrant, :bright
 ```
 
-```julia
+```julia execution={"iopub.status.busy": "2020-09-10T11:00:48.749000+02:00", "iopub.execute_input": "2020-09-10T11:00:48.749000+02:00", "iopub.status.idle": "2020-09-10T11:00:49.317000+02:00"}
 R"""
 library(ggplot2)
 library(ggrastr)
-library(ggforce)
+#library(ggforce)
 theme_set(theme_bw())
 """;
 
@@ -62,7 +62,7 @@ function(df, frac_col, ymax=1.0, ylabel=ifelse(frac_col == "MolFrac", "Fraction 
         geom_rect(aes(xmin=0.01, xmax=0.5, ymin=0.001, ymax=ym), data.frame(ym=low.max), alpha=0.5, fill=alpha("white", 0.0), color="black") +
         geom_line(aes(x=Correlation, y=.data[[frac_col]], color=Dataset, linetype=Segmentation), df) +
         theme(legend.position=legend_pos, legend.justification=legend_pos, legend.background=element_rect(fill=alpha('white', 0.2)), legend.box='horizontal') +
-        guides(color=guide_legend(order=1)) +
+        guides(color=guide_legend(order=1), title="Source segmentation") +
         labs(x="Maximal correlation", y=ylabel) +
         scale_color_manual(values=color_pal) +
         scale_x_continuous(limits=c(0, 1.01), expand=c(0, 0)) +
@@ -71,7 +71,7 @@ function(df, frac_col, ymax=1.0, ylabel=ifelse(frac_col == "MolFrac", "Fraction 
 """;
 ```
 
-<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true -->
+<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true -->
 ## Load data
 <!-- #endregion -->
 
@@ -119,11 +119,12 @@ merfish = Dict(:df => df_spatial, :gene_names => gene_names, :min_area => 25, :n
 ```
 
 ```julia
+# @time df_spatial, gene_names = B.load_df("$PROJECT_DIR/run_results/osm_fish/paper_prior/segmentation.csv");
 @time df_spatial, gene_names = B.load_df("$PROJECT_DIR/run_results/osm_fish/segmentation.csv");
 # @time df_spatial, gene_names = B.load_df("$PROJECT_DIR/run_results/test_small_cell_penalty/osm_fish/segmentation.csv");
 
-# df_seg_prior = B.load_df("$PROJECT_DIR/run_results/osm_fish/paper_prior/segmentation.csv")[1];
-# df_spatial[!, :cell_prior] = df_seg_prior.cell;
+df_seg_prior = B.load_df("$PROJECT_DIR/run_results/osm_fish/paper_prior/segmentation.csv")[1];
+df_spatial[!, :cell_prior] = df_seg_prior.cell;
 
 @time dapi_seg_labels = B.load_segmentation_mask("/home/vpetukhov/data/spatal/linnarsson/paper_segmentation.tiff");
 df_spatial[!, :cell_dapi] = denserank(B.staining_value_per_transcript(df_spatial, dapi_seg_labels)) .- 1;
@@ -176,6 +177,7 @@ starmap1020 = Dict(:df => df_spatial, :gene_names => gene_names, :min_area => 25
 ### Allen smFISH
 
 ```julia
+# @time df_spatial, gene_names = B.load_df("$PROJECT_DIR/run_results/allen_smfish/no_prior/segmentation.csv");
 @time df_spatial, gene_names = B.load_df("$PROJECT_DIR/run_results/spacejam2/allen_sm_fish/no_dapi/segmentation.csv");
 # @time df_spatial, gene_names = B.load_df("$PROJECT_DIR/run_results/test_small_cell_penalty/allen_smfish/segmentation.csv");
 
@@ -264,6 +266,22 @@ datasets = deepcopy((osmfish=osmfish, merfish=merfish, allen_smfish=allen_smfish
 ```
 
 ```julia
+# cell_col_names = [:cell, :cell_dapi, :cell_watershed];
+# cell_col_labels = ["Baysor", "Paper", "Watershed"]
+# for k in keys(datasets)
+#     d = datasets[k]
+#     d[:qc_per_cell_dfs] = B.prepare_qc_df.(Ref(d[:df]), cell_col_names; min_area=d[:min_area], 
+#         min_molecules_per_cell=get(d, :min_mols_per_cell, 50), max_elongation=15);
+    
+#     for (i, cs) in enumerate(cell_col_names)
+#         d[:df][!, cs][.!in.(d[:df][!, cs], Ref(Set(d[:qc_per_cell_dfs][i].cell_id)))] .= 0
+#     end
+#     println(k)
+#     display(B.plot_qc_comparison(d[:qc_per_cell_dfs], max_quants=[0.995, 0.99, 0.99, 0.999, 0.999], labels=cell_col_labels))
+# end
+```
+
+```julia
 cell_col_names = [:cell, :cell_dapi, :cell_watershed, :cell_prior];
 cell_col_labels = ["Baysor", "Paper", "Watershed", "Baysor with Prior"]
 for k in keys(datasets)
@@ -294,6 +312,21 @@ for k in keys(datasets)
     # Already filtered above
     d[:match_res] = B.match_assignments([denserank(d[:df][!, cs]) .- 1 for cs in [:cell, :cell_dapi]]...);
     d[:match_res_watershed] = B.match_assignments([denserank(d[:df][!, cs]) .- 1 for cs in [:cell, :cell_watershed]]...);
+#     d[:match_res_prior_dapi] = B.match_assignments([denserank(d[:df][!, cs]) .- 1 for cs in [:cell_prior, :cell_dapi]]...);
+#     d[:match_res_prior] = B.match_assignments([denserank(d[:df][!, cs]) .- 1 for cs in [:cell, :cell_prior]]...);
+
+    println(k)
+    display(B.plot_matching_comparison(d[:match_res]))
+end
+```
+
+```julia
+for k in keys(datasets)
+    d = datasets[k]
+#     assignments_filt = [denserank(ifelse.(in.(d[:df][!,s], Ref(qdf.cell_id)), d[:df][!,s], 0)) .- 1 for (s, qdf) in zip([:cell, :cell_dapi], d[:qc_per_cell_dfs])];
+    # Already filtered above
+    d[:match_res] = B.match_assignments([denserank(d[:df][!, cs]) .- 1 for cs in [:cell, :cell_dapi]]...);
+    d[:match_res_watershed] = B.match_assignments([denserank(d[:df][!, cs]) .- 1 for cs in [:cell, :cell_watershed]]...);
     d[:match_res_prior_dapi] = B.match_assignments([denserank(d[:df][!, cs]) .- 1 for cs in [:cell_prior, :cell_dapi]]...);
     d[:match_res_prior] = B.match_assignments([denserank(d[:df][!, cs]) .- 1 for cs in [:cell, :cell_prior]]...);
 
@@ -307,6 +340,43 @@ for k in keys(datasets)
     d = datasets[k]
     d[:stat_df] = B.build_statistics_df(d[:qc_per_cell_dfs][1:2], d[:match_res], d[:df])
     display(d[:stat_df])
+end
+```
+
+```julia
+for k in keys(datasets)
+    d = datasets[k]
+    d[:stat_df] = B.build_statistics_df(d[:qc_per_cell_dfs][1:2], d[:match_res], d[:df])
+    display(d[:stat_df])
+end
+```
+
+```julia
+@time for k in keys(datasets)
+    if k == :iss
+        continue
+    end
+    d = datasets[k]
+    d[:part_cors] = [B.estimate_non_matching_part_correlation(d[:df], d[:qc_per_cell_dfs][1:2], d[:match_res], rev=r) for r in [false, true]]
+
+    if size(d[:qc_per_cell_dfs][3], 1) > 0
+        d[:part_cors_watershed] = [B.estimate_non_matching_part_correlation(d[:df], d[:qc_per_cell_dfs][[1,3]], d[:match_res_watershed], rev=r, 
+                cell_cols=[:cell, :cell_watershed]) for r in [false, true]]
+    end
+
+#     if size(d[:qc_per_cell_dfs][4], 1) > 0
+#         d[:part_cors_prior_dapi] = [B.estimate_non_matching_part_correlation(d[:df], d[:qc_per_cell_dfs][[4,2]], d[:match_res_prior_dapi], rev=r, 
+#                 cell_cols=[:cell_prior, :cell_dapi]) for r in [false, true]]
+
+#         d[:part_cors_prior] = [B.estimate_non_matching_part_correlation(d[:df], d[:qc_per_cell_dfs][[1,4]], d[:match_res_prior], rev=r, 
+#                 cell_cols=[:cell, :cell_prior]) for r in [false, true]]
+#     end
+
+    t_bins = -0.05:0.02:1.0
+    plt = Plots.histogram(d[:part_cors][1][1], bins=t_bins, widen=false, label="Baysor", legend=:topleft, 
+        xlabel="Correlation", ylabel="Num. of cells", title=k);
+    Plots.histogram!(d[:part_cors][2][1], bins=t_bins, label="DAPI", alpha=0.6)
+    display(plt)
 end
 ```
 
@@ -391,7 +461,7 @@ plt
 
 ### Correlation plots
 
-```julia
+```julia execution={"iopub.status.busy": "2020-09-10T11:27:55.203000+02:00", "iopub.execute_input": "2020-09-10T11:27:55.203000+02:00", "iopub.status.idle": "2020-09-10T11:27:55.416000+02:00"}
 color_per_col_label = Dict(Pair.(sort(cell_col_labels), Plots._all_defaults[end][:color_palette][1:length(cell_col_labels)]));
 ```
 
@@ -400,7 +470,20 @@ pdfs1 = [DataFrame(:Correlation => d[:part_cors][1][1], :Type => d[:name]) for d
 pdfs2 = [DataFrame(:Correlation => d[:part_cors][2][1], :Type => d[:name]) for d in datasets if :part_cors in keys(d)];
 t_heights = (0.9 .* hcat(size.(pdfs1, 1), size.(pdfs2, 1)) ./ max.(size.(pdfs1, 1), size.(pdfs2, 1)))[sortperm([d.Type[1] for d in pdfs2]),:]
 
-plt = @df vcat(pdfs1...) violin(:Type, :Correlation, side=:right, label="Baysor", ylabel="Correlation between parts", 
+plt = @df vcat(pdfs1...) violin(:Type, :Correlation, side=:right, label="Baysor", ylabel="Correlation between parts", legendtitle="Source",
+    bg_legend=Colors.RGBA(1.0, 1.0, 1.0, 0.9), bar_width=t_heights[:,1], size=(500, 240), legend=:bottomright, xgrid=false, color=color_per_col_label["Baysor"])
+@df vcat(pdfs2...) violin!(:Type, :Correlation, side=:left, label="Paper", bar_width=t_heights[:,2], color=color_per_col_label["Paper"])
+
+Plots.savefig(plt, "$PLOT_DIR/correlations_paper.pdf")
+plt
+```
+
+```julia
+pdfs1 = [DataFrame(:Correlation => d[:part_cors][1][1], :Type => d[:name]) for d in datasets if :part_cors in keys(d)];
+pdfs2 = [DataFrame(:Correlation => d[:part_cors][2][1], :Type => d[:name]) for d in datasets if :part_cors in keys(d)];
+t_heights = (0.9 .* hcat(size.(pdfs1, 1), size.(pdfs2, 1)) ./ max.(size.(pdfs1, 1), size.(pdfs2, 1)))[sortperm([d.Type[1] for d in pdfs2]),:]
+
+plt = @df vcat(pdfs1...) violin(:Type, :Correlation, side=:right, label="Baysor", ylabel="Correlation between parts", legendtitle="Source",
     bg_legend=Colors.RGBA(1.0, 1.0, 1.0, 0.9), bar_width=t_heights[:,1], size=(500, 240), legend=:bottomright, xgrid=false, color=color_per_col_label["Baysor"])
 @df vcat(pdfs2...) violin!(:Type, :Correlation, side=:left, label="Paper", bar_width=t_heights[:,2], color=color_per_col_label["Paper"])
 
@@ -413,7 +496,7 @@ pdfs1 = [DataFrame(:Correlation => d[:part_cors_watershed][1][1], :Type => d[:na
 pdfs2 = [DataFrame(:Correlation => d[:part_cors_watershed][2][1], :Type => d[:name]) for d in datasets if :part_cors_watershed in keys(d)];
 t_heights = (0.9 .* hcat(size.(pdfs1, 1), size.(pdfs2, 1)) ./ max.(size.(pdfs1, 1), size.(pdfs2, 1)))[sortperm([d.Type[1] for d in pdfs2]),:]
 
-plt = @df vcat(pdfs1...) violin(:Type, :Correlation, side=:right, label="Baysor", ylabel="Correlation between parts", 
+plt = @df vcat(pdfs1...) violin(:Type, :Correlation, side=:right, label="Baysor", ylabel="Correlation between parts", legendtitle="Source",
     bg_legend=Colors.RGBA(1.0, 1.0, 1.0, 0.9), bar_width=t_heights[:,1], size=(500, 240), legend=:bottomright, xgrid=false, color=color_per_col_label["Baysor"])
 @df vcat(pdfs2...) violin!(:Type, :Correlation, side=:left, label="Watershed", bar_width=t_heights[:,2], color=color_per_col_label["Watershed"])
 
@@ -521,7 +604,7 @@ for n in [:osmfish, :allen_smfish, :merfish]
     d = datasets[n]
     @time neighb_cm = B.neighborhood_count_matrix(d[:df], 50);
     @time color_transformation = B.gene_composition_transformation(neighb_cm, d[:df].confidence);
-    @time gene_colors = B.gene_composition_colors(neighb_cm, color_transformation; color_range=400);
+    @time gene_colors = B.gene_composition_colors(neighb_cm, color_transformation);
 
     d[:df][!, :gene_color] = gene_colors;
     d[:df][!, :color] = deepcopy(gene_colors);
@@ -628,7 +711,7 @@ pdfs1 = [DataFrame(:Correlation => d[:part_cors_prior_dapi][1][1], :Type => d[:n
 pdfs2 = [DataFrame(:Correlation => d[:part_cors_prior_dapi][2][1], :Type => d[:name]) for d in datasets if :part_cors_prior in keys(d)];
 t_heights = (0.9 .* hcat(size.(pdfs1, 1), size.(pdfs2, 1)) ./ max.(size.(pdfs1, 1), size.(pdfs2, 1)))[sortperm([d.Type[1] for d in pdfs2]),:]
 
-plt = @df vcat(pdfs1...) violin(:Type, :Correlation, side=:right, label="Baysor with Prior", ylabel="Correlation between parts", 
+plt = @df vcat(pdfs1...) violin(:Type, :Correlation, side=:right, label="Baysor with Prior", ylabel="Correlation between parts", legendtitle="Source",
     bg_legend=Colors.RGBA(1.0, 1.0, 1.0, 0.9), bar_width=t_heights[:,1], size=(500, 240), legend=:bottomright, xgrid=false, color=color_per_col_label["Baysor with Prior"])
 @df vcat(pdfs2...) violin!(:Type, :Correlation, side=:left, label="Paper", bar_width=t_heights[:,2], color=color_per_col_label["Paper"])
 
@@ -641,7 +724,7 @@ pdfs1 = [DataFrame(:Correlation => d[:part_cors_prior][1][1], :Type => d[:name])
 pdfs2 = [DataFrame(:Correlation => d[:part_cors_prior][2][1], :Type => d[:name]) for d in datasets if :part_cors_prior in keys(d)];
 t_heights = (0.9 .* hcat(size.(pdfs1, 1), size.(pdfs2, 1)) ./ max.(size.(pdfs1, 1), size.(pdfs2, 1)))[sortperm([d.Type[1] for d in pdfs2]),:]
 
-plt = @df vcat(pdfs1...) violin(:Type, :Correlation, side=:right, label="Baysor", ylabel="Correlation between parts", 
+plt = @df vcat(pdfs1...) violin(:Type, :Correlation, side=:right, label="Baysor", ylabel="Correlation between parts", legendtitle="Source",
     bg_legend=Colors.RGBA(1.0, 1.0, 1.0, 0.9), bar_width=t_heights[:,1], size=(500, 240), legend=:bottomright, xgrid=false, color=color_per_col_label["Baysor"])
 @df vcat(pdfs2...) violin!(:Type, :Correlation, side=:left, label="Baysor with Prior", bar_width=t_heights[:,2], 
     color=color_per_col_label["Baysor with Prior"])
@@ -704,18 +787,25 @@ end
 #### Cell stats
 
 ```julia
+R"""
+col_vals <- setNames($("#" .* Colors.hex.(values(color_per_col_label), :RRGGBB)), $(collect(keys(color_per_col_label))))
+""";
+```
+
+```julia
 p_df = vcat(vcat([[@where(DataFrame(:Val => d[:qc_per_cell_dfs][i].n_transcripts, :Dataset => d[:name], :Segmentation => n), :Val .< quantile(:Val, 0.995)) 
         for d in datasets if size(d[:qc_per_cell_dfs][i], 1) > 0] for (i,n) in enumerate(cell_col_labels)]...)...);
 
 R"""
 gg <- ggplot($p_df, aes(x=Dataset, y=Val, fill=Segmentation)) + 
     geom_boxplot_jitter(outlier.jitter.width=0.05, outlier.size=0.5, outlier.alpha=0.25) +
-    scale_y_continuous(minor_breaks=c(seq(1, 10, length.out=5), seq(10, 100, length.out=5), seq(100, 1000, length.out=5)), trans="log10", name='Num. of transcripts') +
+    scale_y_continuous(minor_breaks=c(seq(1, 10, length.out=5), seq(10, 100, length.out=5), seq(100, 1000, length.out=5)), trans="log10", name='Num. of molecules') +
+    scale_fill_manual(values=col_vals) +
     xlab("") +
-    theme(legend.position=c(1, 0.05), legend.justification=c(1, 0), legend.background=element_rect(fill=alpha('white', 0.9)), 
-        axis.text=element_text(size=9), axis.title.y=element_text(size=12), legend.text=element_text(size=10), legend.title=element_text(size=12))
+    theme(legend.position=c(1, 0.01), legend.justification=c(1, 0), legend.background=element_rect(fill=alpha('white', 0.5)), 
+        axis.text=element_text(size=9.5), axis.title.y=element_text(size=16), legend.text=element_text(size=12), legend.title=element_text(size=12))
 
-ggsave('./plots/num_transcripts.pdf', width=4, height=4)
+ggsave('./plots/supp/num_transcripts.pdf', width=4, height=4)
 gg
 """
 ```
@@ -728,19 +818,21 @@ R"""
 gg <- ggplot($p_df, aes(x=Dataset, y=Val, fill=Segmentation)) + 
     geom_boxplot_jitter(outlier.jitter.width=0.05, outlier.size=0.5, outlier.alpha=0.25) +
     scale_y_continuous(limits=c(0, 400), expand=c(0, 0), name='sqrt(Area)') +
+    scale_fill_manual(values=col_vals) +
     xlab("") +
     theme(legend.position=c(0.01, 0.99), legend.justification=c(0, 1), legend.background=element_rect(fill=alpha('white', 0.9)),
-        axis.text=element_text(size=9), axis.title.y=element_text(size=12), legend.text=element_text(size=10), legend.title=element_text(size=12))
+        axis.text=element_text(size=9.5), axis.title.y=element_text(size=16), legend.text=element_text(size=12), legend.title=element_text(size=12))
 
-ggsave('./plots/area.pdf', width=4, height=4)
+ggsave('./plots/supp/area.pdf', width=4, height=4)
 gg
 """
 ```
 
 #### Similarity vs Prior Confidence 
 
-```julia
+```julia execution={"iopub.status.busy": "2020-09-10T11:25:45.664000+02:00", "iopub.execute_input": "2020-09-10T11:25:45.664000+02:00", "iopub.status.idle": "2020-09-10T11:25:45.923000+02:00"}
 subdirs = filter(x -> startswith(x, "ca1"), readdir("$PROJECT_DIR/run_results/iss_hippo/"));
+subdirs = subdirs[subdirs .!= "ca1_watershed_prior"];
 
 dfs = [B.load_df("$PROJECT_DIR/run_results/iss_hippo/$(sd)/segmentation.csv")[1] for sd in subdirs];
 
@@ -754,9 +846,9 @@ dir_aliases = Dict(
 );
 ```
 
-```julia
+```julia execution={"iopub.status.busy": "2020-09-10T11:38:25.063000+02:00", "iopub.execute_input": "2020-09-10T11:38:25.063000+02:00", "iopub.status.idle": "2020-09-10T11:38:25.456000+02:00"}
 p_df = @orderby(vcat([DataFrame(:Val => Clustering.mutualinfo(d.cell, d.parent_id), :Type => dir_aliases[n]) for (n,d) in zip(subdirs, dfs)]...), :Type);
-plt = Plots.plot(parse.(Float16, p_df.Type), p_df.Val, ylabel = "Mutual Information", legend=false, xlabel="Prior confidence", marker=true, lw=3, size=(370, 300))
+plt = Plots.plot(parse.(Float16, p_df.Type), p_df.Val, ylabel = "Mutual Information", legend=false, xlabel="Prior confidence", marker=true, lw=3, size=(370, 300), color="#5200cc", alpha=0.8)
 
 Plots.savefig(plt, "./plots/mutual_info_per_confidence.pdf")
 plt
@@ -766,22 +858,28 @@ plt
 # @orderby(vcat([DataFrame(:Val => Clustering.varinfo(d.cell, d.parent_id), :Type => dir_aliases[n]) for (n,d) in zip(subdirs, dfs)]...), :Type)
 ```
 
-```julia
+```julia execution={"iopub.status.busy": "2020-09-10T11:26:12.204000+02:00", "iopub.execute_input": "2020-09-10T11:26:12.204000+02:00", "iopub.status.idle": "2020-09-10T11:26:15.191000+02:00"}
 # t_cnts = Dict(n => counts(d.cell, d.parent_id) for (n,d) in zip(subdirs, dfs));
 t_matches = [B.match_assignments(d.cell, d.parent_id) for d in dfs];
 ```
 
-```julia
+```julia execution={"iopub.status.busy": "2020-09-10T11:44:00.795000+02:00", "iopub.execute_input": "2020-09-10T11:44:00.795000+02:00", "iopub.status.idle": "2020-09-10T11:44:01.478000+02:00"}
 min_size = 1
-p_df = vcat([DataFrame(:Frac => tm.max_overlaps[1][vec(sum(tm.contingency, dims=2))[2:end] .>= min_size], :Confidence => dir_aliases[n], :Type => "Baysor cells") for (n,tm) in zip(subdirs, t_matches)]...);
-p_df = vcat([DataFrame(:Frac => tm.max_overlaps[2][vec(sum(tm.contingency, dims=1))[2:end] .>= min_size], :Confidence => dir_aliases[n], :Type => "Paper cells") for (n,tm) in zip(subdirs, t_matches)]..., p_df);
+p_df = vcat([DataFrame(:Frac => tm.max_overlaps[1][vec(sum(tm.contingency, dims=2))[2:end] .>= min_size], :Confidence => dir_aliases[n], :Type => "Baysor") for (n,tm) in zip(subdirs, t_matches)]...);
+p_df = vcat([DataFrame(:Frac => tm.max_overlaps[2][vec(sum(tm.contingency, dims=1))[2:end] .>= min_size], :Confidence => dir_aliases[n], :Type => "Paper") for (n,tm) in zip(subdirs, t_matches)]..., p_df);
 p_df = @orderby(p_df, :Confidence);
+
+color_vals = "#" .* [hex(color_per_col_label[k], :RRGGBB) for k in ["Baysor", "Paper"]];
 
 R"""
 gg <- ggplot($p_df, aes(x=Confidence, y=Frac)) + 
     geom_boxplot_jitter(aes(fill=Type), outlier.jitter.width=0.05, outlier.size=0.2, outlier.alpha=0.1) +
     theme(legend.position=c(1, 0.05), legend.justification=c(1, 0), legend.background=element_rect(fill=alpha('white', 0.2))) +
-    scale_y_continuous(limits=c(0.0, 1.01), expand=c(0, 0), name="Overlap fraction with the best matching cell")
+    scale_y_continuous(limits=c(0.0, 1.01), expand=c(0, 0), name="Overlap fraction with the best matching cell") +
+    scale_fill_manual(values=$color_vals) +
+    xlab("Prior confidence") +
+    guides(fill=guide_legend(title="Source")) +
+    theme(axis.text=element_text(size=14), axis.title=element_text(size=16), legend.text=element_text(size=14), legend.title=element_text(size=16))
 
 ggsave('./plots/prior_confidence_iss.pdf', width=6, height=4)
 gg
