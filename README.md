@@ -4,4 +4,4 @@ Analysis for the Baysor paper. See the [Baysor](https://github.com/hms-dbmi/Bays
 
 ## Visualization of the results
 
-- [MERFISH](http://vitessce.io/?url=https%3A%2F%2Fsealver.in%2Fvitessce%2Fconfig.json&theme=dark)
+- [Allen sm-FISH](http://vitessce.io/?url=https%3A%2F%2Fsealver.in%2Fvitessce%2Fallen_sm_fish.json&theme=dark)
