@@ -5,6 +5,5 @@
 
 .ipynb_checkpoints
 
-cache
-run_results
-plots
+
+.history
