@@ -4,7 +4,7 @@ Analysis for the Baysor paper. See the [Baysor](https://github.com/hms-dbmi/Bays
 
 ## Visualization of the results
 
-- [Allen sm-FISH](http://vitessce.io/?url=https%3A%2F%2Fsealver.in%2Fvitessce%2Fallen_sm_fish.json&theme=dark)
+- [Allen sm-FISH](http://vitessce.io/?url=https%3A%2F%2Fsealver.in%2Fvitessce%2Fallen_smfish%2Fconfig.json&theme=dark)
 - [ISS](http://vitessce.io/?url=https%3A%2F%2Fsealver.in%2Fvitessce%2Fiss%2Fconfig.json&theme=dark)
 - [MERFISH](http://vitessce.io/?url=https%3A%2F%2Fsealver.in%2Fvitessce%2Fmerfish%2Fconfig.json&theme=dark)
 - [osmFISH](http://vitessce.io/?url=https%3A%2F%2Fsealver.in%2Fvitessce%2Fosm_fish%2Fconfig.json&theme=dark)
