@@ -6,7 +6,9 @@ import Plots
 import SparseArrays
 
 using LinearAlgebra
+using ProgressMeter
 using Statistics
+using StatsPlots
 
 function assignment_summary_df(assignments::Pair{Symbol, Vector{Int}}...; min_molecules_per_cell::Int)
     assignments = Dict(assignments)
@@ -63,10 +65,10 @@ function plot_subset(df_spatial::DataFrame, dapi_arr::Union{Matrix, Nothing}, (x
     plot_args = Dict(:size => plot_size, :xticks => xticks, :yticks => yticks)
 
     fig = MK.Figure(resolution=plot_size)
-    get_axis() = ticks ? 
+    get_axis() = ticks ?
         MK.Axis(fig, xticks=xticks, yticks=yticks) :
         MK.Axis(fig, xticklabelsvisible=false, xticksvisible=false, yticklabelsvisible=false, yticksvisible=false)
-    
+
     fig[1, 1] = get_axis()
 
     if plot_bg_dapi
@@ -390,29 +392,144 @@ function correlation_effect_size_df(datasets::NamedTuple, part_cor_key::Symbol, 
     return vcat(dfs...)
 end
 
-function append_matching_statistics!(d::Dict{Symbol, Any}, cell_col_names::Vector{Symbol})
+function append_matching_statistics!(d::Dict{Symbol, Any}, cell_col_names::Vector{Symbol};
+        target_cell_col_names::Vector{Symbol}=cell_col_names)
     cur_names = sort(intersect(cell_col_names, propertynames(d[:df])))
-    d[:qc_per_cell_dfs] = Dict(k => prepare_qc_df(d[:df], k; min_area=d[:min_area], 
+    if length(setdiff(cell_col_names, cur_names)) > 0
+        @warn "The following col names weren't found in the data: $(setdiff(cell_col_names, cur_names))"
+    end
+
+    d[:qc_per_cell_dfs] = Dict(k => prepare_qc_df(d[:df], k; min_area=d[:min_area],
         min_molecules_per_cell=d[:min_mols_per_cell], max_elongation=15) for k in cur_names);
-    
+
     for cs in cur_names # filter cells
         d[:df][!, cs][.!in.(d[:df][!, cs], Ref(Set(d[:qc_per_cell_dfs][cs].cell_id)))] .= 0
+        any(d[:df][!, cs] .!= 0) || error("All cells were filtered out for '$cs'")
     end
 
     d[:assignment_filt] = Dict(cs => denserank(d[:df][!, cs]) .- 1 for cs in cur_names)
 
-    for (i1,c1) in enumerate(cur_names)
-        for c2 in cur_names[(i1 + 1):length(cur_names)]
-            parts = [get(split(String(c1), '_'), 2, ""), get(split(String(c2), '_'), 2, "")]
+    # for (i1,c1) in enumerate(cur_names)
+        # for c2 in cur_names[(i1 + 1):length(cur_names)]
+    @showprogress for c1 in cur_names
+        for c2 in target_cell_col_names
+            (c1 != c2) || continue
+            parts = [get(split(String(c1), '_'), 2, "cell"), get(split(String(c2), '_'), 2, "cell")]
             parts = [p for p in parts if length(p) > 0]
             sm = Symbol(join(vcat(["match_res"], parts), "_"))
             d[sm] = match_assignments(d[:assignment_filt][c1], d[:assignment_filt][c2]);
 
+            sel_cells = [c1, c2]
             spc = Symbol(join(vcat(["part_cors"], parts), "_"))
-            qc_dfs = [d[:qc_per_cell_dfs][k] for k in [c1, c2]]
-            d[spc] = [estimate_non_matching_part_correlation(d[:df], qc_dfs, d[sm], rev=r, cell_cols=[c1, c2]) for r in [false, true]]
+            qc_dfs = [d[:qc_per_cell_dfs][k] for k in sel_cells]
+            d[spc] = [estimate_non_matching_part_correlation(d[:df], qc_dfs, d[sm], rev=r, cell_cols=sel_cells) for r in [false, true]]
+
+            ssd = Symbol(join(vcat(["stat_df"], parts), "_"))
+            d[ssd] = build_statistics_df([d[:qc_per_cell_dfs][k] for k in sel_cells], d[sm], d[:df]; labels=sel_cells)
+
+            sfv = Symbol(join(vcat(["frac_vals"], parts), "_"))
+            overlap_mask = d[sm].n_overlaps[1] .== 1
+            overlap_nums, uniq_overlap_ids = vec.(collect.(findmax(d[sm].contingency[2:end,:][overlap_mask, 2:end], dims=2)));
+            d[sfv] = (
+                overlap = overlap_nums ./ d[:qc_per_cell_dfs][c2].n_transcripts[getindex.(uniq_overlap_ids, 2)],
+                assigned = d[:qc_per_cell_dfs][c1].n_transcripts[overlap_mask] ./ d[:qc_per_cell_dfs][c2].n_transcripts[getindex.(uniq_overlap_ids, 2)],
+                overlap_ids = findall(overlap_mask)
+            )
         end
     end
+end
 
-    d[:stat_df] = build_statistics_df([d[:qc_per_cell_dfs][k] for k in [:cell, :cell_paper]], d[:match_res], d[:df])
+## Quick visualizations
+
+
+function plot_correlation(d::Dict{Symbol, Any}, part_cor_key::Symbol)
+    pdfs1 = DataFrame(:Correlation => d[part_cor_key][1][1], :Type => d[:name]);
+    pdfs2 = DataFrame(:Correlation => d[part_cor_key][2][1], :Type => d[:name]);
+    t_heights = (0.9 .* (size(pdfs1, 1), size(pdfs2, 1)) ./ max(size(pdfs1, 1), size(pdfs2, 1)))
+
+    display(("Baysor", sum(pdfs1.Correlation .> 0.5), sum(pdfs1.Correlation .< 0.5)))
+    display(("Paper", sum(pdfs2.Correlation .> 0.5), sum(pdfs2.Correlation .< 0.5)))
+
+    plt = @df pdfs1 violin(:Type, :Correlation, side=:right, label="Baysor", ylabel="Correlation between parts", legendtitle="Source",
+        bg_legend=Colors.RGBA(1.0, 1.0, 1.0, 0.9), bar_width=t_heights[1], size=(300, 240), legend=:bottomright, xgrid=false) # , color=color_per_col_label["Baysor"]
+    @df pdfs2 violin!(:Type, :Correlation, side=:left, label="Paper", bar_width=t_heights[2]) # , color=color_per_col_label["Paper"]
+
+    return plt
+end
+
+function plot_correlation_lines(d::Dict{Symbol, Any}, part_cor_key::Symbol; lw=3, max_cor=0.5)
+    vals = sort(d[part_cor_key][1][1])
+    vals = vals[vals .<= max_cor]
+    plt = Plots.plot(vals, 1:length(vals), label="Baysor", size=(300, 200), # , color=color_per_col_label["Baysor"]
+        xlabel="Correlation", ylabel="Num. cells", legend=:topleft, lw=lw)
+    vals = sort(d[part_cor_key][2][1])
+    vals = vals[vals .<= max_cor]
+    Plots.plot!(vals, 1:length(vals), label="Paper", lw=lw) # , color=color_per_col_label["Paper"]
+    return plt
+end
+
+function plot_matching_hists(frac_vals::NamedTuple, match_res::NamedTuple)
+    bins = 0.0:0.02:1.0
+    plt1 = Plots.histogram(frac_vals.overlap, bins=bins, label=false,
+        xlabel="Overlap size / poly-a cell size", ylabel="Cell density", normalize=true, lw=0, xlim=(0, 1))
+    Plots.stephist!(frac_vals.overlap, bins=bins, label="", normalize=true, color="black")
+    Plots.vline!([0.9975], label="", color="black", lw=2.5);
+
+    bins = 0.0:0.04:2.0
+    plt2 = Plots.histogram(min.(frac_vals.assigned, 1.99), bins=bins, normalize=true, lw=0,
+        legend=false, xlabel="Target cell size / poly-A cell size", ylabel="Cell density")
+    Plots.stephist!(min.(frac_vals.assigned, 1.99), bins=bins, label="", normalize=true, color="black")
+    Plots.vline!([1], label="", color="black", lw=2.5);
+
+    vals = B.prob_array(match_res.n_overlaps[1] .+ 1);
+    xvals = 0:(length(vals) - 1)
+    plt3 = Plots.bar(xvals, vals, xlabel="Num. overlaps", ylabel="Fraction", label=false, xticks=xvals, xgrid=false)
+
+    plt = Plots.plot(plt1, plt2, plt3, size=(800, 200), layout=(1, 3))
+    return plt
+end
+
+function estimate_jaccard_per_molecule(df::DataFrame, cell_col1::Symbol, cell_col2::Symbol; min_mols_per_cell::Int)
+    mol_ids_per_cell = [Set.(B.split_ids(df[!, k] .+ 1)[2:end]) for k in [cell_col1, cell_col2]]
+    cms = [B.convert_segmentation_to_counts(df.gene, df[!, k]) for k in [cell_col1, cell_col2]]
+
+    jac_dists = Dict{Tuple{Int, Int}, Float64}();
+    exp_cors = Dict{Tuple{Int, Int}, Float64}();
+    dists = Float64[]
+    for i in 1:size(df, 1)
+        c1, c2 = df[i, cell_col1], df[i, cell_col2]
+        if (c1 == 0) || (c2 == 0)
+            push!(dists, 0.0)
+            continue
+        end
+
+        mpc1, mpc2 = mol_ids_per_cell[1][c1], mol_ids_per_cell[2][c2]
+        if (length(mpc1) < min_mols_per_cell) || (length(mpc2) < min_mols_per_cell)
+            push!(dists, 0.0)
+            continue
+        end
+
+        if !((c1, c2) in keys(jac_dists))
+            jac_dists[(c1, c2)] = length(intersect(mpc1, mpc2)) / length(union(mpc1, mpc2))
+
+            exp_cors[(c1, c2)] = cor(cms[1][:,c1], cms[2][:,c2])
+        end
+        push!(dists, jac_dists[(c1, c2)])
+    end
+
+    return (dists=dists, jac_dists=jac_dists, exp_cors=exp_cors, cms=cms)
+end
+
+function precision_recall_df(contingency::SparseArrays.SparseMatrixCSC{Int64, Int64})
+    overlap_sizes, overlap_ids = findmax(contingency[2:end, 2:end], dims=1);
+    overlap_sizes = collect(overlap_sizes)[:];
+    overlap_ids = getindex.(overlap_ids, 1)[:];
+
+    n_mols_per_cell_src = sum(contingency[2:end,:], dims=2)[:];
+    n_mols_per_cell_targ = sum(contingency[:, 2:end], dims=1)[:];
+
+    n_overlaps = sum(contingency[2:end, 2:end] ./ n_mols_per_cell_targ' .> 0.25, dims=1)[:]
+    recall = overlap_sizes ./ n_mols_per_cell_targ;
+    precision = overlap_sizes ./ n_mols_per_cell_src[overlap_ids];
+    return DataFrame(Dict(:precision => precision, :recall => recall, :n_overlaps => n_overlaps, :overlap_sizes => overlap_sizes))
 end
