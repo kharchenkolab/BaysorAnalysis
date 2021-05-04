@@ -2,8 +2,8 @@ using DrWatson
 import Images
 import CSV
 
-function load_dataset(seg_df_path::String, paper_seg_labels_path::String, watershed_path::String, dapi_path::String, pciseq_path::String="";
-        name::String, min_area::Float64, min_mols_per_cell=50, paper_polygons::Bool=false, dapi::Bool=false, watershed::Bool=false, pciseq=true,
+function load_dataset(seg_df_path::String, paper_seg_labels_path::String, watershed_path::String, dapi_path::String, prior_path::String="", pciseq_path::String="";
+        name::String, min_area::Float64, min_mols_per_cell=50, paper_polygons::Bool=false, dapi::Bool=false, watershed::Bool=false, pciseq=true, prior=true,
         rescale::Bool=false, store_labels::Bool=false)
     df_spatial, gene_names = B.load_df(datadir(seg_df_path))
     res = Dict(:df => df_spatial, :gene_names => gene_names, :min_area => min_area,
@@ -48,8 +48,13 @@ function load_dataset(seg_df_path::String, paper_seg_labels_path::String, waters
     end
 
     if pciseq && (length(pciseq_path) > 0)
-        df_pciseq = DataFrame!(CSV.File(datadir(pciseq_path)))
+        df_pciseq = DataFrame(CSV.File(datadir(pciseq_path)), copycols=false)
         df_spatial[!, :cell_pciseq] = df_pciseq.neighbour
+    end
+
+    if prior && (length(prior_path) > 0)
+        df_prior = DataFrame(CSV.File(datadir(prior_path)), copycols=false)
+        df_spatial[!, :cell_prior] = df_prior.cell
     end
 
     return res
@@ -60,7 +65,8 @@ function load_merfish(seg_df_path::String="exp_pro/merfish_moffit/baysor/segment
         "exp_raw/merfish_moffit/merfish_coords_adj.csv",
         "",
         "exp_raw/merfish_moffit/dapi_merged_watershed.tif",
-        "exp_raw/merfish_moffit/dapi_merged.tiff";
+        "exp_raw/merfish_moffit/dapi_merged.tiff",
+        "exp_pro/merfish_moffit/baysor_prior/segmentation.csv";
         paper_polygons=false, min_area=min_area, name="MERFISH", kwargs...
     )
 
@@ -91,15 +97,17 @@ load_osmfish(; min_area::Float64=70.0, kwargs...) =
         "exp_raw/osmfish/paper_segmentation.tiff",
         "exp_raw/osmfish/nuclei_watershed.tif",
         "exp_raw/osmfish/nuclei.tif",
+        "exp_pro/osmfish/baysor_prior/segmentation.csv",
         "exp_pro/osmfish/pciseq/spots.csv";
         min_area=min_area, name="osmFISH", kwargs...
     )
 
 load_starmap1020(; min_area::Float64=25.0, kwargs...) =
     load_dataset(
-        "exp_pro/starmap_vis1020/baysor_cl0/segmentation.csv", # TODO: cl0
+        "exp_pro/starmap_vis1020/baysor_cl0/segmentation.csv",
         "exp_raw/starmap_vis1020/segmentation.tiff",
-        "", "";
+        "", "",
+        "exp_pro/starmap_vis1020/baysor_prior/segmentation.csv";
         dapi=false, watershed=false,
         min_area=min_area, name="STARmap 1020", kwargs...
     )
@@ -110,6 +118,7 @@ load_allen_smfish(csv_path::String="exp_pro/allen_smfish/baysor/segmentation.csv
         "exp_raw/allen_smfish/segmentation_labels_from_json_transposed.tiff",
         "exp_raw/allen_smfish/dapi_merged_watershed.tif",
         "exp_raw/allen_smfish/dapi_merged.tiff",
+        "exp_pro/allen_smfish/baysor_prior/segmentation.csv",
         "exp_pro/allen_smfish/pciseq/spots.csv";
         rescale=true, min_area=min_area, name="Allen smFISH", kwargs...
     )
@@ -118,7 +127,8 @@ function load_iss(csv_path::String="exp_pro/iss_hippo/baysor/segmentation.csv"; 
     res = load_dataset(
         csv_path, "",
         "exp_raw/iss_hippo/CA1DapiBoundaries_4-3_right_watershed.tif",
-        "exp_raw/iss_hippo/CA1DapiBoundaries_4-3_right.tif";
+        "exp_raw/iss_hippo/CA1DapiBoundaries_4-3_right.tif",
+        "exp_pro/iss_hippo/baysor_prior/segmentation.csv";
         paper_polygons=false, min_area=min_area, min_mols_per_cell=3, name="ISS", kwargs...
     )
 

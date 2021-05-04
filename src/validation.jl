@@ -393,10 +393,14 @@ function correlation_effect_size_df(datasets::NamedTuple, part_cor_key::Symbol, 
 end
 
 function append_matching_statistics!(d::Dict{Symbol, Any}, cell_col_names::Vector{Symbol};
-        target_cell_col_names::Vector{Symbol}=cell_col_names)
+        target_cell_col_names::Union{Vector{Symbol}, Nothing}=nothing)
     cur_names = sort(intersect(cell_col_names, propertynames(d[:df])))
     if length(setdiff(cell_col_names, cur_names)) > 0
         @warn "The following col names weren't found in the data: $(setdiff(cell_col_names, cur_names))"
+    end
+
+    if target_cell_col_names === nothing
+        target_cell_col_names = cur_names
     end
 
     d[:qc_per_cell_dfs] = Dict(k => prepare_qc_df(d[:df], k; min_area=d[:min_area],
