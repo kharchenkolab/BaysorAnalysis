@@ -21,7 +21,7 @@ end
 
 function plot_subset(df_spatial::DataFrame, dapi_arr::Union{Matrix, Nothing}, (xs, xe), (ys, ye); polygons::Union{Bool, Vector{Matrix{Float64}}}=true, markersize=2.0, alpha=0.2, min_molecules_per_cell::Int=1,
         grid_step::Float64=5.0, bandwidth::Float64=grid_step, min_border_length=3, cell_col::Symbol=:cell, dapi_alpha=0.9, polygon_line_width::T1 where T1 <: Real=2, dens_threshold::Float64=1e-5,
-        noise::Bool=true, size_mult=1/3, plot_raw_dapi::Bool=true, color_col::Symbol=:color, annotation_col::Union{Symbol, Nothing}=nothing, build_panel::Bool=true, grid_alpha::Float64=0.5, ticks=false,
+        noise::Bool=true, size_mult=1/3, plot_raw_dapi::Bool=true, color_col::Symbol=:ncv_color, annotation_col::Union{Symbol, Nothing}=nothing, build_panel::Bool=true, grid_alpha::Float64=0.5, ticks=false,
         swap_plots::Bool=false, dapi_color::Symbol=:twilight, clims=nothing, polygon_line_color="black", plot_bg_dapi::Bool=true, kwargs...)
     df_subs = @where(df_spatial, :x .>= xs, :x .<= xe, :y .>= ys, :y .<= ye);
 
@@ -29,7 +29,6 @@ function plot_subset(df_spatial::DataFrame, dapi_arr::Union{Matrix, Nothing}, (x
         if polygons
             polygons = B.boundary_polygons(df_subs, df_subs[!, cell_col], grid_step=grid_step, min_molecules_per_cell=min_molecules_per_cell,
                 bandwidth=bandwidth, min_border_length=min_border_length, dens_threshold=dens_threshold)
-            polygons = [p .- [xs ys] for p in polygons] # TODO: remove after Baysor update
         else
             polygons = Matrix{Float64}[]
         end
@@ -93,7 +92,7 @@ function plot_subset(df_spatial::DataFrame, dapi_arr::Union{Matrix, Nothing}, (x
     fig[1, 2] = get_axis()
     MK.heatmap!(dapi_subs, colormap=dapi_color)
      # TODO: p .- [xs ys] after Baysor update
-    MK.poly!([MK.Point2.(eachrow(p)) for p in polygons]; color="transparent", polygon_kwargs...)
+    MK.poly!([MK.Point2.(eachrow(p .- [xs ys])) for p in polygons]; color="transparent", polygon_kwargs...)
 
     if swap_plots
         fig[1, 1:2] .= fig[1, [2, 1]]
@@ -148,12 +147,14 @@ function plot_comparison_for_cell(df_spatial::DataFrame, xls::Tuple{T, T}, yls::
         plot_raw_dapi = false
     end
 
-    fig = plot_subset(df_spatial, dapi_arr, xls, yls; size_mult=size_mult, build_panel=false, grid_alpha=grid_alpha, markersize=markersize, noise=noise,
+    fig = plot_subset(df_spatial, dapi_arr, xls, yls; size_mult=size_mult, grid_alpha=grid_alpha, markersize=markersize, noise=noise,
         polygon_line_width=polygon_line_width, polygon_alpha=polygon_alpha, plot_raw_dapi=plot_raw_dapi, kwargs...);
 
-    for i in 1:length(fig.scene.children)
-        MK.poly!(fig[1, i], [MK.Point2.(eachrow(p)) for p in paper_polys]; color="transparent", strokecolor=paper_poly_color, strokewidth=polygon_line_width*paper_line_mult)
-    end;
+    if length(paper_polys) > 0
+        for i in 1:length(fig.scene.children)
+            MK.poly!(fig[1, i], [MK.Point2.(eachrow(p)) for p in paper_polys]; color="transparent", strokecolor=paper_poly_color, strokewidth=polygon_line_width*paper_line_mult)
+        end;
+    end
 
     return fig
 end
@@ -390,6 +391,11 @@ function correlation_effect_size_df(datasets::NamedTuple, part_cor_key::Symbol, 
         end
     end
     return vcat(dfs...)
+end
+
+function filter_assignment(assignment::Vector{Int}, min_mols_per_cell::Int)
+    passed_ids = Set(findall(B.count_array(assignment, drop_zero=true) .>= min_mols_per_cell))
+    return denserank([((a in passed_ids) ? a : 0) for a in assignment]) .- 1
 end
 
 function append_matching_statistics!(d::Dict{Symbol, Any}, cell_col_names::Vector{Symbol};

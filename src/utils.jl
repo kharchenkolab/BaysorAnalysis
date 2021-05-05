@@ -45,6 +45,7 @@ end
 
 function set_pyplot_defaults!()
     Plt.rc("axes", axisbelow=true, labelsize=16, grid=true);
+    Plt.rc("axes.spines", right=false, top=false, left=true, bottom=true);
     Plt.rc("font", size=12)
     Plt.rc("grid", alpha=0.25)
     Plt.rc("legend", frameon=false, borderpad=0)

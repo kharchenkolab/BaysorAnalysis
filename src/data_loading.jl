@@ -128,7 +128,8 @@ function load_iss(csv_path::String="exp_pro/iss_hippo/baysor/segmentation.csv"; 
         csv_path, "",
         "exp_raw/iss_hippo/CA1DapiBoundaries_4-3_right_watershed.tif",
         "exp_raw/iss_hippo/CA1DapiBoundaries_4-3_right.tif",
-        "exp_pro/iss_hippo/baysor_prior/segmentation.csv";
+        "exp_pro/iss_hippo/baysor_prior/segmentation.csv",
+        "exp_pro/iss_hippo/pciseq/spots.csv";
         paper_polygons=false, min_area=min_area, min_mols_per_cell=3, name="ISS", kwargs...
     )
 
