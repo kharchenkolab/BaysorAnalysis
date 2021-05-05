@@ -6,15 +6,19 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.9.1
   kernelspec:
-    display_name: Julia 1.3.1
+    display_name: Julia 1.6.0
     language: julia
-    name: julia-1.3
+    name: julia-1.6
 ---
 
-```julia execution={"iopub.status.busy": "2020-09-24T17:32:57.032000+02:00", "iopub.execute_input": "2020-09-24T17:32:58.233000+02:00", "iopub.status.idle": "2020-09-24T17:33:41.546000+02:00"}
-import Baysor
+```julia tags=[]
+using DrWatson
+quickactivate(@__DIR__)
+
+import Baysor as B
+import CairoMakie as MK
 import Colors
 import Images
 import MAT
@@ -33,77 +37,102 @@ using NearestNeighbors
 using Statistics
 using StatsBase
 
-B = Baysor;
+MK.activate!(type = "png");
 ```
 
 ## Load data
 
-```julia execution={"iopub.status.busy": "2020-09-24T17:33:41.547000+02:00", "iopub.execute_input": "2020-09-24T17:33:44.613000+02:00", "iopub.status.idle": "2020-09-24T17:33:55.903000+02:00"}
-@time df_spatial, gene_names = Baysor.load_df("../run_results/spacejam2/allen_sm_fish/no_dapi/segmentation.csv");
+```julia tags=[]
+@time df_spatial, gene_names = B.load_df(datadir("exp_pro/allen_smfish/baysor/segmentation.csv"));
 df_spatial[!, :x] = round.(Int, 10 .* (df_spatial.x .- minimum(df_spatial.x)));
 df_spatial[!, :y] = round.(Int, 10 .* (df_spatial.y .- minimum(df_spatial.y)));
 length(gene_names)
 ```
 
-```julia execution={"iopub.status.busy": "2020-09-24T17:33:55.903000+02:00", "iopub.execute_input": "2020-09-24T17:33:55.903000+02:00", "iopub.status.idle": "2020-09-24T17:35:41.957000+02:00"}
+```julia
 @time neighb_cm = B.neighborhood_count_matrix(df_spatial, 40);
 @time color_transformation = B.gene_composition_transformation(neighb_cm, df_spatial.confidence; sample_size=20000, spread=2.0, min_dist=0.1);
 @time color_emb = B.transform(color_transformation, neighb_cm);
 ```
 
-```julia execution={"iopub.status.busy": "2020-09-24T17:35:41.957000+02:00", "iopub.execute_input": "2020-09-24T17:35:41.957000+02:00", "iopub.status.idle": "2020-09-24T17:36:23.153000+02:00"}
-@time color_emb = B.transform(color_transformation, neighb_cm);
-```
-
-```julia execution={"iopub.status.busy": "2020-09-24T17:36:23.153000+02:00", "iopub.execute_input": "2020-09-24T17:36:23.153000+02:00", "iopub.status.idle": "2020-09-24T17:36:25.636000+02:00"}
+```julia
 @time gene_colors = B.gene_composition_colors(color_emb, lrange=(10, 60));
 df_spatial[!, :color] = gene_colors;
 ```
 
+<!-- #region heading_collapsed="true" tags=[] -->
 ## Coloring examples
+<!-- #endregion -->
 
-```julia execution={"iopub.status.busy": "2020-09-24T17:36:25.636000+02:00", "iopub.execute_input": "2020-09-24T17:36:25.636000+02:00", "iopub.status.idle": "2020-09-24T17:36:27.771000+02:00"}
+```julia
 Plots.theme(:default, framestyle = :box, legendfontsize=10, tickfontsize=10)
 ```
 
-```julia execution={"iopub.status.busy": "2020-09-24T18:10:11.335000+02:00", "iopub.execute_input": "2020-09-24T18:10:11.335000+02:00", "iopub.status.idle": "2020-09-24T18:10:20.605000+02:00"}
+```julia
 Plots.pyplot()
 ```
 
-```julia execution={"iopub.status.busy": "2020-09-24T18:11:43.518000+02:00", "iopub.execute_input": "2020-09-24T18:11:43.518000+02:00", "iopub.status.idle": "2020-09-24T18:12:04.001000+02:00"}
+```julia tags=[]
 sub_lims = [((11000, 13000), (12000, 13500)), ((11500, 13500), (8750, 10250))];
 
-plt = Baysor.plot_cell_borders_polygons(df_spatial, color=:color, ms=0.5, xlims=(5000, 18000), ylims=(2500, 15500), ticks=false, size=(500, 500))
+fig = B.plot_molecules(df_spatial, color=:ncv_color, markersize=0.5, xlims=(5000, 18000), ylims=(2500, 15500), size=(500, 500))
 # for ((xs, xe), (ys, ye)) in sub_lims
 #     Plots.plot!([xs, xs, xe, xe, xs], [ys, ye, ye, ys, ys], color="black", label="", lw=3.0, alpha=0.75)
 # end
 
-Plots.savefig("./plots/allen_sm_fish/gene_coloring.png")
-Plots.closeall()
-plt
+MK.save(plotsdir("segmentation_free/allen_smfish/gene_coloring.png"), fig)
+fig
 ```
 
 ```julia
 for (i,((xs, xe), (ys, ye))) in enumerate(sub_lims)
-    plt = Baysor.plot_cell_borders_polygons(@where(df_spatial, :x .>= xs, :x .<= xe, :y .>= ys, :y .<= ye), color=:color, ms=2.5, 
-        size=(xe - xs, ye - ys) ./ 3, ticks=false) # , xlabel="X", ylabel="Y"
-    Plots.savefig("./plots/allen_sm_fish/gene_coloring_e$(i).png")
-    display(plt)
+    p_df = @where(df_spatial, :x .>= xs, :x .<= xe, :y .>= ys, :y .<= ye)
+    fig = B.plot_molecules(p_df, color=:ncv_color, markersize=2.5, size=(xe - xs, ye - ys) ./ 3)
+    MK.save(plotsdir("segmentation_free/allen_smfish/gene_coloring_e$i.png"), fig)
+    display(fig)
+end
+```
+
+## Varying *k*
+
+```julia
+k_vals = [5, 50, 500, 2000]
+gene_colors_per_k = []
+@showprogress for k in k_vals
+    neighb_cm = Matrix{Float64}(B.neighborhood_count_matrix(df_spatial, k, normalize=false));
+    color_transformation = B.gene_composition_transformation(neighb_cm, df_spatial.confidence; sample_size=10000, spread=2.0, min_dist=0.1);
+    color_emb = B.transform(color_transformation, neighb_cm);
+    gene_colors = B.gene_composition_colors(color_emb);
+    push!(gene_colors_per_k, gene_colors)
+end;
+```
+
+```julia
+for (k, colors) in zip(k_vals, gene_colors_per_k)
+    fig = B.plot_molecules(df_spatial, color=colors, markersize=0.5, size=(500, 500))
+#     MK.xlims!(MK.current_axis(), (5000, 19000))
+#     MK.ylims!(MK.current_axis(), (3000, 17000))
+    MK.xlims!(MK.current_axis(), (10000, 19000))
+    MK.ylims!(MK.current_axis(), (4000, 13000))
+    MK.save(plotsdir("segmentation_free/allen_smfish/vis_$(k)_nn.png"), fig)
+    display(fig)
 end
 ```
 
 ## Method scheme
 
 ```julia
-(xs,xe), (ys,ye) = (12130, 12250), (9725, 9900)
+(xs,xe), (ys,ye) = (12130, 12250), (9750, 9900)
 
 p_df = @where(df_spatial, :x .>= xs, :x .<= xe, :y .>= ys, :y .<= ye) |> deepcopy;
-p_df = @where(p_df, (B.count_array(:gene)[:gene] .> 16) .& (B.count_array(:gene)[:gene] .< 100), .!in.(gene_names[:gene], Ref(["Mpped1"])))
+p_df = @where(p_df, (B.count_array(:gene)[:gene] .> 15), .!in.(gene_names[:gene], Ref(["Mpped1"])))
 p_df.y .*= -1
 
 p_size = (xe - xs, ye - ys) .* 2
-plt1 = B.plot_cell_borders_polygons(p_df, annotation=gene_names[p_df.gene], ms=5, size=p_size, legend=:topright, legend_title="Gene", ticks=false, alpha=0.75)
-plt2 = B.plot_cell_borders_polygons(p_df, color=:color, ms=5, size=p_size, ticks=false, alpha=0.75)
+fig1 = B.plot_molecules(p_df, annotation=gene_names[p_df.gene], markersize=5, size=p_size, legend=false, axis_kwargs=(xgridvisible=false, ygridvisible=false))
+fig1[2,1] = MK.Legend(fig1, fig1.current_axis[], framevisible=false, labelsize=12, orientation=:horizontal, nbanks=2, patchsize=(10,10), markersize=7, markerstrokewidth=0, tellheight=true)
+
+fig2 = B.plot_molecules(p_df, color=:ncv_color, markersize=5, size=p_size) # , alpha=0.75
 
 # B.plot_cell_borders_polygons(p_df, annotation=gene_names[p_df.gene], ms=5, size=(500, 1000), legend=:bottomright, xticks=x_ticks, yticks=y_ticks)
 # Plots.annotate!(p_df.x, p_df.y, 1:size(p_df, 1))
@@ -113,17 +142,18 @@ t_pos_data = B.position_data(p_df);
 # t_pd = t_pos_data[:, knn(KDTree(t_pos_data), t_pos_data[:,[t_id]], 16, true)[1][1][2:end]];
 cent_pos = [12183.0, -9844.0];
 t_pd = t_pos_data[:, knn(KDTree(t_pos_data), cent_pos, 16, true)[1][2:end]];
-for pl in [plt1, plt2]
+for fig in [fig1, fig2]
     for col in eachcol(t_pd)
-#         Plots.plot!(pl, [col[1], t_pos_data[1,t_id]], [col[2], t_pos_data[2,t_id]], label="", color="black", lw=1.5)
-        Plots.plot!(pl, [col[1], cent_pos[1]], [col[2], cent_pos[2]], label="", color="black", lw=1.5)
+#         MK.plot!(pl, [col[1], t_pos_data[1,t_id]], [col[2], t_pos_data[2,t_id]], label="", color="black", lw=1.5)
+        MK.lines!(fig.current_axis[], [col[1], cent_pos[1]], [col[2], cent_pos[2]], label="", color="black", lw=1.5)
     end
 end
 
-Plots.savefig(plt1, "./plots/allen_sm_fish/knns_genes.pdf")
-Plots.savefig(plt2, "./plots/allen_sm_fish/knns_expr.pdf")
+MK.save(plotsdir("segmentation_free/allen_smfish/knns_genes.pdf"), fig2)
+MK.save(plotsdir("segmentation_free/allen_smfish/knns_expr.pdf"), fig2)
 
-Plots.plot(plt1, plt2, size=(p_size[1] * 2, p_size[2]))
+display(fig1)
+display(fig2)
 ```
 
 <!-- #region toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true -->
