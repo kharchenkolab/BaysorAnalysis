@@ -1,5 +1,6 @@
 import Clustering
 import Plots
+import PyPlot as Plt
 
 function clustermap(mtx::T where T <: AbstractMatrix{Float64}, gene_names::Vector{String}; gene_ord::Union{<:AbstractVector{<:Integer}, Bool}=true,
         cell_ord::Union{<:AbstractVector{<:Integer},Bool}=true, diag_genes::Bool=false, kwargs...)
@@ -27,4 +28,8 @@ function clustermap(mtx::T where T <: AbstractMatrix{Float64}, gene_names::Vecto
 
     plt = Plots.heatmap(mtx[gene_ord, cell_ord]; yticks=(1:length(gene_names), gene_names[gene_ord]), kwargs...)
     return plt, cell_ord, gene_ord
+end
+
+function label_axis!(ax, label::String; x=-0.2, y=1.05, fontsize=24)
+    ax.text(x, y, label, transform=ax.transAxes, fontsize=fontsize, va="top", ha="right", fontfamily="sans-serif", fontname="Helvetica")
 end

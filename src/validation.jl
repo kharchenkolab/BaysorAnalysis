@@ -499,6 +499,8 @@ function plot_matching_hists(frac_vals::NamedTuple, match_res::NamedTuple)
     return plt
 end
 
+## Matching benchmarks
+
 function estimate_jaccard_per_molecule(df::DataFrame, cell_col1::Symbol, cell_col2::Symbol; min_mols_per_cell::Int)
     mol_ids_per_cell = [Set.(B.split_ids(df[!, k] .+ 1)[2:end]) for k in [cell_col1, cell_col2]]
     cms = [B.convert_segmentation_to_counts(df.gene, df[!, k]) for k in [cell_col1, cell_col2]]
