@@ -92,6 +92,12 @@ path = "/home/vpetukhov/.julia/dev/Baysor"
 uuid = "cc9f9468-1fbe-11e9-0acf-e9460511877c"
 version = "0.4.3"
 
+[[BenchmarkTools]]
+deps = ["JSON", "Logging", "Printf", "Statistics", "UUIDs"]
+git-tree-sha1 = "068fda9b756e41e6c75da7b771e6f89fa8a43d15"
+uuid = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
+version = "0.7.0"
+
 [[Blosc]]
 deps = ["Blosc_jll"]
 git-tree-sha1 = "84cf7d0f8fd46ca6f1b3e0305b4b4a37afe50fd6"
@@ -753,6 +759,12 @@ version = "1.0.0"
 git-tree-sha1 = "a3f24677c21f5bbe9d2a714f95dcd58337fb2856"
 uuid = "82899510-4779-5014-852e-03e436cf321d"
 version = "1.0.0"
+
+[[JLD]]
+deps = ["FileIO", "HDF5", "Printf"]
+git-tree-sha1 = "1d291ba1730de859903b480e6f85a0dc40c19dcb"
+uuid = "4138dd39-2aa7-5051-a626-17a0bb65d9c8"
+version = "0.12.3"
 
 [[JLD2]]
 deps = ["CodecZlib", "DataStructures", "MacroTools", "Mmap", "Pkg", "Printf", "Requires", "UUIDs"]
