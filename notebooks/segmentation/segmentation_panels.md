@@ -6,59 +6,50 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.9.1
   kernelspec:
-    display_name: Julia 1.3.1
+    display_name: Julia 1.6.0
     language: julia
-    name: julia-1.3
+    name: julia-1.6
 ---
 
-```julia execution={"iopub.status.busy": "2020-09-23T19:22:15.909000+02:00", "iopub.execute_input": "2020-09-23T19:22:15.910000+02:00", "iopub.status.idle": "2020-09-23T19:23:20.084000+02:00"}
-import Baysor
+```julia tags=[]
+using DrWatson
+quickactivate(@__DIR__)
+Base.LOAD_PATH .= findproject(@__DIR__);
+
+import Baysor as B
+import BaysorAnalysis as BA
+
+import CairoMakie as MK
 import Colors
 import Images
-import MAT
 import MultivariateStats
 import Plots
 import CSV
+import PyPlot as Plt
+import Seaborn as Sns
 
 using Colors
 using DataFrames
 using DataFramesMeta
+using LinearAlgebra
 using NearestNeighbors
 using ProgressMeter
 using Statistics
 using StatsBase
 
-B = Baysor;
+ProgressMeter.ijulia_behavior(:clear);
+MK.activate!(type = "png");
+BA.set_pyplot_defaults!()
+cplotsdir(args...) = plotsdir("segmentation", args...);
 ```
 
-```julia
-# module T
-
-# using DataFrames
-# using DataFramesMeta
-
-# import Baysor
-# import Plots
-
-# function get_plot_inset(df_spatial::DataFrame, min_x::T, max_x::T, min_y::T, max_y::T; target_x::T, target_y::T, grid_step::Float64, upscale::Float64=4.0) where T <: Real
-#     subs_df = @where(df_spatial, :x .> min_x, :x .< max_x, :y .> min_y, :y .< max_y)
-#     subs_polygons = Baysor.boundary_polygons(subs_df, subs_df.cell, grid_step=grid_step);
-#     (px_min, px_max), (py_min, py_max) = [Baysor.val_range(df_spatial[!,s]) for s in (:x, :y)];
-#     pwidth, pheight = px_max - px_min, py_max - py_min
-
-#     nw, nh = min.([upscale * (max_x - min_x) / pwidth, upscale * (max_y - min_y) / pheight], 1.0);
-#     inset = Plots.bbox((target_x - px_min) / pwidth, (target_y - py_min) / pheight, nw, nh, :bottom, :left);
-#     return subs_df, subs_polygons, (1, inset)
-# end
-
-# end
-```
-
+<!-- #region heading_collapsed="true" tags=[] -->
 ## Prior segmentation penalties
+<!-- #endregion -->
 
-```julia execution={"iopub.status.busy": "2020-09-10T12:52:42.041000+02:00", "iopub.execute_input": "2020-09-10T12:52:46.884000+02:00", "iopub.status.idle": "2020-09-10T12:52:49.746000+02:00"}
+```julia tags=[]
 module T
 
 oversegmentation_penalty(confidence::Float64, fraction::Float64) = 
@@ -70,11 +61,11 @@ overlap_penalty(confidence::Float64, fraction::Float64) =
 end
 ```
 
-```julia execution={"iopub.status.busy": "2020-09-10T13:00:12.213000+02:00", "iopub.execute_input": "2020-09-10T13:00:12.214000+02:00", "iopub.status.idle": "2020-09-10T13:00:27.892000+02:00"}
+```julia tags=[]
 Plots.pyplot()
 ```
 
-```julia execution={"iopub.status.busy": "2020-09-10T13:02:55.675000+02:00", "iopub.execute_input": "2020-09-10T13:02:55.675000+02:00", "iopub.status.idle": "2020-09-10T13:02:56.652000+02:00"}
+```julia tags=[]
 frac_vals = 0.0:0.01:1.0
 plt1 = Plots.plot(xlabel="Fraction from the largest overlap", ylabel="Density multiplier", legend=:topleft, legend_title="Confidence", background_legend="#FFFFFF05", legendtitlefonthalign=:hleft)
 plt2 = Plots.plot(xlabel="Total overlap fraction", ylabel="Density multiplier", legend=:topleft, legend_title="Confidence", background_legend="#FFFFFF05")
@@ -83,7 +74,7 @@ for conf in 0.0:0.2:1.0
     plt2 = Plots.plot!(plt2, frac_vals, T.overlap_penalty.(conf, frac_vals), label="$(conf)")
 end
 plt = Plots.plot(plt1, plt2, size=(800, 300))
-Plots.savefig("./plots/prior_segmentation_penalties.pdf")
+Plots.savefig(cplotsdir("prior_segmentation_penalties.pdf"))
 Plots.closeall()
 plt
 ```
@@ -100,7 +91,8 @@ Plots.plot!(t_x, t_x, line=:dash, label="No penalty", lw=2)
 t_x = [0, 20]
 Plots.plot!(t_x, 0.25 .* t_x .+ 0.75, line=:dash, label="Linear penalty", lw=2)
 
-Plots.savefig("./plots/expression_penalty.pdf")
+Plots.savefig(cplotsdir("expression_penalty.pdf"))
+Plots.closeall()
 plt
 ```
 
@@ -108,57 +100,29 @@ plt
 ## MERFISH Hypothalamus
 <!-- #endregion -->
 
-```julia execution={"iopub.status.busy": "2020-09-23T19:23:20.084000+02:00", "iopub.execute_input": "2020-09-23T19:23:22.942000+02:00", "iopub.status.idle": "2020-09-23T19:23:26.071000+02:00"}
-Plots.theme(:default, framestyle = :box, legendfontsize=10, tickfontsize=10)
+```julia
+@time data = BA.load_merfish(paper_polygons=false, dapi=true, watershed=false, pciseq=false);
 ```
 
-```julia execution={"iopub.status.busy": "2020-09-23T19:23:26.071000+02:00", "iopub.execute_input": "2020-09-23T19:23:26.071000+02:00", "iopub.status.idle": "2020-09-23T19:23:26.146000+02:00"}
-plot_dir = "./plots/merfish_hypothalamus/";
+<!-- #region tags=[] heading_collapsed="true" -->
+### Large panel
+<!-- #endregion -->
+
+```julia
+df_sub = @where(data[:df], :x .>= -3000, :x .<= -2250, :y .<= -2750, :y .>= -3810) |> deepcopy;
+df_sub[!, :x_adj] = df_sub.x;
+df_sub[!, :y_adj] = df_sub.y;
+df_sub[!, :x] = df_sub.x_raw;
+df_sub[!, :y] = df_sub.y_raw;
 ```
 
-```julia execution={"iopub.status.busy": "2020-09-21T13:46:11.552000+02:00", "iopub.execute_input": "2020-09-21T13:46:11.552000+02:00", "iopub.status.idle": "2020-09-21T13:46:47.568000+02:00"}
-@time df_spatial, gene_names = Baysor.load_df("../run_results/merfish_moffit/segmentation.csv");
-
-@time df_adj, gn_adj = Baysor.load_df("/home/vpetukhov/data/spatal/merfish_moffit/merfish_coords_adj.csv");
-@assert all(gn_adj[df_adj.gene] .== gene_names[df_spatial.gene])
-
-@time dapi_arr = Float16.(Images.load("/home/vpetukhov/data/spatal/merfish_moffit/dapi_merged.tiff"));
-```
-
-```julia execution={"iopub.status.busy": "2020-09-21T14:29:47.090000+02:00", "iopub.execute_input": "2020-09-21T14:29:47.090000+02:00", "iopub.status.idle": "2020-09-21T14:30:01.445000+02:00"}
+```julia tags=[]
 grid_step = 1.0
-@time polygons = B.boundary_polygons(df_spatial, df_spatial.cell, grid_step=grid_step);
+@time polygons = B.boundary_polygons(df_sub, df_sub.cell, grid_step=grid_step, dens_threshold=1e-3);
 length(polygons)
 ```
 
-```julia execution={"iopub.status.busy": "2020-09-21T13:48:02.026000+02:00", "iopub.execute_input": "2020-09-21T13:48:02.026000+02:00", "iopub.status.idle": "2020-09-21T13:49:54.754000+02:00"}
-@time neighb_cm = Baysor.neighborhood_count_matrix(df_spatial, 70);
-@time color_transformation = Baysor.gene_composition_transformation(neighb_cm, df_spatial.confidence);
-```
-
-```julia execution={"iopub.status.busy": "2020-09-21T13:49:54.754000+02:00", "iopub.execute_input": "2020-09-21T13:49:54.754000+02:00", "iopub.status.idle": "2020-09-21T13:53:24.992000+02:00"}
-@time color_embedding = B.transform(color_transformation, neighb_cm);
-```
-
-```julia execution={"iopub.status.busy": "2020-09-21T13:53:24.992000+02:00", "iopub.execute_input": "2020-09-21T13:53:24.992000+02:00", "iopub.status.idle": "2020-09-21T13:53:33.573000+02:00"}
-@time gene_colors = B.gene_composition_colors(color_embedding, lrange=(10, 70));
-df_spatial[!, :color] = gene_colors;
-```
-
-```julia execution={"iopub.status.busy": "2020-09-21T13:53:33.573000+02:00", "iopub.execute_input": "2020-09-21T13:53:33.573000+02:00", "iopub.status.idle": "2020-09-21T13:53:36.066000+02:00"}
-df_adj[!, :cell_paper] = ifelse.(ismissing.(df_adj.cell), 0, denserank(df_adj.cell));
-df_adj[!, :cell] = df_spatial.cell;
-df_adj[!, :cluster] = df_spatial.cluster;
-df_adj[!, :color] = gene_colors;
-df_adj[!, :xr] = df_spatial.x;
-df_adj[!, :yr] = df_spatial.y;
-```
-
-```julia execution={"iopub.status.busy": "2020-09-21T13:53:36.066000+02:00", "iopub.execute_input": "2020-09-21T13:53:36.066000+02:00", "iopub.status.idle": "2020-09-21T13:53:46.322000+02:00"}
-Plots.pyplot()
-```
-
-```julia execution={"iopub.status.busy": "2020-09-21T14:33:05.610000+02:00", "iopub.execute_input": "2020-09-21T14:33:05.610000+02:00", "iopub.status.idle": "2020-09-21T14:33:34.667000+02:00"}
+```julia tags=[]
 subset_coords = [
     ((-2872, -2822), (-2875, -2800)), 
     ((-2920, -2870), (-3700, -3625)),
@@ -167,37 +131,42 @@ subset_coords = [
     ((-2410, -2310), (-3225, -3075))
 ];
 
-plt = B.plot_dataset_colors(@where(df_spatial, :x .>= -3000, :x .<= -2250, :y .<= -2750, :y .>= -3810), :color, polygons=polygons, min_molecules_per_cell=50,
-    min_pixels_per_cell=7, polygon_alpha=0.5, ms=1.0, polygon_line_width=1.5, ticks=false)[1];
+plt = B.plot_dataset_colors(df_sub, :ncv_color; polygons=polygons, min_molecules_per_cell=50, min_pixels_per_cell=7, 
+    markersize=1.0, poly_strokewidth=1.5, ticks=false,axis_kwargs=(xticklabelsvisible=false, yticklabelsvisible=false))
 
 for ((xs, xe), (ys, ye)) in subset_coords
-    plt = Plots.plot!([xs, xs, xe, xe, xs], [ys, ye, ye, ys, ys], color="black", label="", lw=4.0, alpha=0.75)
+    MK.lines!([xs, xs, xe, xe, xs], [ys, ye, ye, ys, ys], color=Colors.GrayA(0.0, 0.75), linewidth=3)
 end
 
-@time Plots.savefig(plt, "$plot_dir/polygons.png");
-display(plt)
-Plots.closeall()
+MK.xlims!(MK.current_axis(), B.val_range(df_sub.x))
+MK.ylims!(MK.current_axis(), B.val_range(df_sub.y))
+
+@time MK.save(cplotsdir("merfish_hypothalamus/polygons.png"), plt);
+plt
 ```
 
-```julia execution={"iopub.status.busy": "2020-09-23T19:24:10.310000+02:00", "iopub.execute_input": "2020-09-23T19:24:11.513000+02:00", "iopub.status.idle": "2020-09-23T19:24:12.423000+02:00"}
-Plots.pyplot()
-```
+<!-- #region tags=[] heading_collapsed="true" -->
+### Zoom-ins
+<!-- #endregion -->
 
-```julia execution={"iopub.status.busy": "2020-09-21T14:53:53.174000+02:00", "iopub.execute_input": "2020-09-21T14:53:53.174000+02:00", "iopub.status.idle": "2020-09-21T14:54:23.787000+02:00"}
+```julia
 for (i, ((xs, xe), (ys, ye))) in enumerate(subset_coords)
-    t_df = @where(df_adj, :xr .>= xs, :xr .<= xe, :yr .>= ys, :yr .<= ye)
+    t_df = @where(data[:df], :x_raw .>= xs, :x_raw .<= xe, :y_raw .>= ys, :y_raw .<= ye)
 
-    plt = B.plot_subset(df_adj, dapi_arr, B.val_range(t_df.x), B.val_range(t_df.y); size_mult=0.5,
-        ms=2.1, grid_step=1.0, bandwidth=4.0, min_border_length=100, alpha=0.75, polygon_line_width=2.5, swap_plots=(i<=3),
-        polygon_alpha=0.7, noise=false, ticks=false, dapi_color=:twilight, clims=(0, 1))
-    Plots.savefig(plt, "$plot_dir/example_$i.png")
+    plt = BA.plot_subset(data[:df], data[:dapi_arr], B.val_range(t_df.x), B.val_range(t_df.y); size_mult=0.5,
+        markersize=2.1, grid_step=1.0, bandwidth=4.0, min_border_length=100, alpha=0.75, polygon_line_width=2.5, swap_plots=(i<=3),
+        polygon_alpha=0.7, noise=false, ticks=false, dapi_color=:twilight, clims=(0, 1)) 
+    MK.save(cplotsdir("merfish_hypothalamus/example_$i.png"), plt)
     display(plt);
-    Plots.closeall()
 end;
 
-plt = Plots.heatmap(rand(3, 3), clims=(0, 1), color=:twilight, margin=3 * Plots.mm, size=(300,400), legend=:bottom)
-Plots.savefig(plt, "$plot_dir/legend.pdf")
-Plots.closeall();
+fig = MK.Figure(resolution=(400, 200))
+ax = fig[1,1] = MK.Axis(fig)
+hm = MK.heatmap!(ax, diagm(0 => ones(3)), colormap=:twilight)
+fig[2, 1] = leg = MK.Colorbar(fig, hm, vertical=false, flipaxis=false, ticks=[0.0, 0.2, 0.4, 0.6, 0.8, 1.0])
+display(fig)
+
+MK.save(cplotsdir("merfish_hypothalamus/legend.pdf"), fig);
 ```
 
 <!-- #region toc-hr-collapsed=true toc-nb-collapsed=true -->
