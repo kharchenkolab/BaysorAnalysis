@@ -83,15 +83,6 @@ function(df, frac_col, ymax=1.0, ylabel=ifelse(frac_col == "MolFrac", "Fraction 
 ```
 
 ```julia
-# import HDF5
-# @time dapi = HDF5.h5read("/home/vpetukhov/data/spatal/linnarsson/Nuclei_polyT.int16.sf.hdf5", "/nuclei");
-# t_quant = UInt(quantile(vec(dapi), 0.995));
-# dapi[dapi .> t_quant] .= t_quant;
-
-# @time Images.save("/home/vpetukhov/data/spatal/linnarsson/nuclei.tif", dapi);
-```
-
-```julia
 @time osmfish = BA.load_osmfish(paper_polygons=true, dapi=true, watershed=true);
 ```
 
@@ -172,82 +163,109 @@ delete!(datasets[:iss], :part_cors_cell_watershed);
 # end
 ```
 
-### Assignment stats
-
-```julia
-p_df = vcat([vcat([DataFrame(:Protocol => d[:name], :Frac => mean(d[:df][!, s] .!= 0), :Type => n) for d in datasets if s in propertynames(d[:df])]...) 
-        for (s,n) in zip(cell_col_names, cell_col_labels)]...);
-p_df.Protocol[p_df.Protocol .== "Allen smFISH"] .= "Allen\nsmFISH";
-
-fig = Plt.figure(figsize=(5,4), frameon=false)
-ax = Sns.barplot(x=p_df.Protocol, y=p_df.Frac, hue=p_df.Type, palette=color_per_label, hue_order=sort(unique(p_df.Type)))
-Plt.ylim(0, 1)
-Plt.legend(loc="upper right", frameon=true, labelspacing=0.1, handlelength=1, borderpad=0.4)
-Plt.ylabel("Fraction of molecules\nassigned to cells");
-ax.set_xticklabels(ax.get_xticklabels(), fontsize=11);
-Plt.tight_layout();
-Plt.savefig(cplotsdir("assignment_frac.pdf"));
-```
-
-```julia
-p_df = vcat([vcat([DataFrame(:Protocol => d[:name], :Frac => size(df,1), :Type => alias_per_col[c]) 
-                for (c,df) in d[:qc_per_cell_dfs]]...) for d in datasets]...);
-p_df.Protocol[p_df.Protocol .== "Allen smFISH"] .= "Allen\nsmFISH";
-
-fig = Plt.figure(figsize=(5, 4), frameon=false)
-ax = Sns.barplot(x=p_df.Protocol, y=p_df.Frac, hue=p_df.Type, palette=color_per_label, hue_order=sort(unique(p_df.Type)))
-Plt.ylim(0, 10000)
-# Plt.legend(loc="upper right", frameon=true, labelspacing=0, handlelength=1)
-Plt.legend([], [])
-Plt.ylabel("Number of cells");
-ax.set_xticklabels(ax.get_xticklabels(), fontsize=11);
-Plt.tight_layout();
-Plt.savefig(cplotsdir("num_cells.pdf"));
-```
+## Prepare data
 
 ```julia
 import Clustering: mutualinfo
 
 col_combinations = vcat([[(cell_col_names[i], cell_col_names[j]) for j in 1:(i-1)] for i in 1:length(cell_col_names)]...);
-p_df = [[Dict(:mi => mutualinfo(d[:df][!,c1], d[:df][!,c2]), :protocol => d[:name], :pair => alias_per_col[c1] * " vs " * alias_per_col[c2])
+col_combinations = [((cs[1] == :cell_paper) ? (cs[2], cs[1]) : cs) for cs in col_combinations];
+@time pairwise_mi_df = [[Dict(:mi => mutualinfo(d[:df][!,c1], d[:df][!,c2]), :protocol => d[:name], :pair => alias_per_col[c1] * " vs " * alias_per_col[c2])
     for (c1,c2) in col_combinations if (c1 in propertynames(d[:df])) && (c2 in propertynames(d[:df]))] for d in datasets];
-p_df = DataFrame(vcat(p_df...));
+pairwise_mi_df = DataFrame(vcat(pairwise_mi_df...));
 ```
 
 ```julia
-hue_order = vcat(["Paper vs Baysor"], setdiff(sort(unique(p_df.pair)), ["Paper vs Baysor"]))
+assign_df = vcat([vcat([DataFrame(:Protocol => d[:name], :NCells => size(df,1), :Frac => mean(d[:df][!,c] .!= 0), :Type => alias_per_col[c]) 
+                for (c,df) in d[:qc_per_cell_dfs]]...) for d in datasets]...);
+assign_df.Protocol[assign_df.Protocol .== "Allen smFISH"] .= "Allen\nsmFISH";
+```
+
+## Main
+
+```julia
+fig, (ax_ncells, ax_frac) = Plt.subplots(2, 1, figsize=(5, 7.5))
+Sns.barplot(x=assign_df.Protocol, y=assign_df.NCells, hue=assign_df.Type, palette=color_per_label, 
+    hue_order=sort(unique(assign_df.Type)), saturation=1, ax=ax_ncells, edgecolor="black", linewidth=0.4)
+ax_ncells.set_ylim(0, 10000)
+ax_ncells.legend([], [])
+ax_ncells.set_ylabel("Number of cells");
+ax_ncells.set_xticklabels(ax_ncells.get_xticklabels(), fontsize=11);
+
+
+Sns.barplot(x=assign_df.Protocol, y=assign_df.Frac, hue=assign_df.Type, palette=color_per_label, 
+    hue_order=sort(unique(assign_df.Type)), saturation=1, ax=ax_frac, edgecolor="black", linewidth=0.4)
+ax_frac.set_ylim(0, 1)
+ax_frac.legend(loc="upper right", frameon=true, labelspacing=0.1, handlelength=1, borderpad=0.4, 
+    fontsize=11, bbox_to_anchor=(1.0, 1.13))
+ax_frac.set_ylabel("Fraction of molecules\nassigned to cells");
+ax_frac.set_xticklabels(ax_frac.get_xticklabels(), fontsize=11);
+
+BA.label_axis!(ax_ncells, "a")
+BA.label_axis!(ax_frac, "b")
+
+Plt.tight_layout();
+Plt.savefig(cplotsdir("main_stats.pdf"), transparent=true);
+```
+
+### Benchmarks
+
+```julia
+fig, axes = Plt.subplots(1, 4, figsize=(14, 3.9), gridspec_kw=Dict("width_ratios" => [4, 4, 3, 3]))
+ax_mi = axes[1]
+
+cor_combs = [(:part_cors_cell_paper, "Baysor", "Paper"), (:part_cors_cell_pciseq, "Baysor", "pciSeq"), (:part_cors_cell_watershed, "Baysor", "Watershed")]
+for ((pcr, l1, l2), ax) in zip(cor_combs, axes[2:end])
+    BA.plot_correlation_violins(datasets, pcr, (l1, l2), color_per_label=color_per_label, ax=ax)
+    labs = [l.get_text() for l in ax.get_xticklabels()]
+    labs[labs .== "Allen smFISH"] .= "Allen\nsmFISH"
+    ax.set_xticklabels(labs)
+end
+
+p_df = @where(pairwise_mi_df, occursin.(" vs Paper", :pair), :protocol .!= "STARmap")
+p_df = @transform(p_df, pair=getindex.(split.(:pair, " vs "), 1)) |> deepcopy;
+p_df.protocol[p_df.protocol .== "Allen smFISH"] .= "Allen\nsmFISH"
+
+Sns.barplot(x=p_df.protocol, y=p_df.mi, hue=p_df.pair, hue_order=sort(unique(p_df.pair), by=lowercase),
+    palette=color_per_label, saturation=1, ax=ax_mi, edgecolor="black", linewidth=0.4)
+ax_mi.legend(loc="upper right", borderaxespad=0, handlelength=1, labelspacing=0.2, handletextpad=0.2, fontsize=11)
+ax_mi.set_ylim(0, 1)
+ax_mi.set_ylabel("Mutual Information with Paper");
+ax_mi.set_xticklabels(ax_mi.get_xticklabels(), fontsize=11)
+
+BA.label_axis!.(axes, ["e", "f", "g", "h"]; x=-0.19, y=1.05)
+
+Plt.tight_layout()
+Plt.savefig(cplotsdir("main_cor.pdf"), transparent=true);
+```
+
+## Supplements
+
+```julia
+p_df = pairwise_mi_df;
+hue_order = vcat(["Baysor vs Paper"], setdiff(sort(unique(p_df.pair)), ["Baysor vs Paper"]))
 Plt.figure(figsize=(9,4))
 ax = Sns.barplot(x=p_df.protocol, y=p_df.mi, hue=p_df.pair, hue_order=hue_order)
 Plt.legend(bbox_to_anchor=(1.01, 0.95), borderaxespad=0, frameon=true, borderpad=0.5)
 Plt.ylabel("Mutual information")
-ax.set_xticklabels(ax.get_xticklabels());
 Plt.tight_layout();
-Plt.savefig(cplotsdir("pairwise_mutual_info.pdf"));
+Plt.savefig(cplotsdir("pairwise_mutual_info.pdf"), transparent=true);
 ```
 
 ### Correlation plots
 
 ```julia
-cor_combs = [(:part_cors_cell_paper, "Baysor", "Paper"), (:part_cors_cell_pciseq, "Baysor", "pciSeq"), (:part_cors_cell_watershed, "Baysor", "Watershed"), 
-    (:part_cors_pciseq_paper, "pciSeq", "Paper"), (:part_cors_pciseq_watershed, "pciSeq", "Watershed"),
-    (:part_cors_cell_prior, "Baysor", "Baysor with prior"), (:part_cors_prior_paper, "Baysor with prior", "Paper")]
-for (pcr, l1, l2) in cor_combs
-    p_df = vcat([vcat([DataFrame(:Correlation => d[pcr][i][1], :Type => d[:name], :Source => t) for d in datasets if (pcr in keys(d)) && (d[:name] != "ISS")]...) 
-        for (i,t) in enumerate([l1, l2])]...);
-    p_df = @orderby(p_df, :Type)
+fig, axes = Plt.subplots(2, 2, figsize=(8.5, 6.5), gridspec_kw=Dict("width_ratios" => [4.2, 3]))
 
-    fw = (length(unique(p_df.Type)) == 4) ? 5 : 4
-    Plt.figure(figsize=(fw, 3.5))
-    ax = Sns.violinplot(x=p_df.Type, y=p_df.Correlation, hue=p_df.Source, split=true, inner="quart", palette=color_per_label, bw=0.2, scale="count")
-    ax.legend(title="Source", loc="lower right", frameon=false, labelspacing=0.25)
-#     ax.set_xticklabels(ax.get_xticklabels(), rotation=20, ha="right")
-    ax.set_xticklabels(ax.get_xticklabels(), fontsize=11)
-    Plt.ylim(-1.0, 1);
-    Plt.yticks(-1.0:0.5:1.0)
-    Plt.ylabel("Correlation between parts");
-    Plt.tight_layout()
-    Plt.savefig(cplotsdir("expression_correlation/$(lowercase(l1))_$(lowercase(l2)).pdf"), transparent=true);
+cor_combs = [(:part_cors_cell_prior, "Baysor", "Baysor with prior"), (:part_cors_prior_paper, "Baysor with prior", "Paper"),
+    (:part_cors_pciseq_paper, "pciSeq", "Paper"), (:part_cors_pciseq_watershed, "pciSeq", "Watershed")]
+for ((pcr, l1, l2), ax) in zip(cor_combs, axes)
+    BA.plot_correlation_violins(datasets, pcr, (l1, l2), color_per_label=color_per_label, ax=ax)
 end
+
+BA.label_axis!.(vcat(axes...), ["a", "c", "b", "d"]; x=-0.1, y=1.14)
+Plt.tight_layout()
+Plt.savefig(cplotsdir("correlations_supp.pdf"), transparent=true);
 ```
 
 ```julia
@@ -263,7 +281,7 @@ RCall.ijulia_setdevice(MIME("image/svg+xml"), width=8, height=10)
 plt
 ```
 
-<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true heading_collapsed="true" tags=[] -->
+<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true tags=[] heading_collapsed="true" -->
 ### Correlation examples
 <!-- #endregion -->
 
@@ -358,59 +376,6 @@ plt
 # end
 ```
 
-### Segmentation Prior
-
-<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true toc-hr-collapsed=true toc-nb-collapsed=true tags=[] heading_collapsed="true" -->
-#### Examples 1
-<!-- #endregion -->
-
-```julia
-t_d = datasets.iss
-BA.plot_comparison_for_cell(t_d[:df], (5625, 5950), (2000, 2250), nothing, t_d[:dapi_arr]; ms=4.0, alpha=0.75,
-    bandwidth=3.0, grid_step=1.0, ticks=true, size_mult=2.0, polygon_line_width=3.0, polygon_alpha=0.5)
-```
-
-```julia
-t_d = datasets.iss
-xls, yls = (5625, 5950), (2000, 2250)
-c_polys = t_d[:paper_polys][[all((p[:,2] .< yls[2]) .& (p[:,2] .> yls[1]) .& (p[:,1] .< xls[2]) .& (p[:,1] .> xls[1])) for p in t_d[:paper_polys]]];
-BA.plot_comparison_for_cell(t_d[:df], xls, yls, nothing, t_d[:dapi_arr]; paper_polys=c_polys, ms=4.0, alpha=0.75,
-    bandwidth=3.0, grid_step=1.0, ticks=true, size_mult=2.0, polygon_line_width=2.0, polygon_alpha=0.5)
-```
-
-<!-- #region toc-hr-collapsed=true toc-nb-collapsed=true tags=[] heading_collapsed="true" -->
-#### Examples 2
-<!-- #endregion -->
-
-```julia
-t_d = datasets.merfish
-# @time t_d[:prior_polys] = B.boundary_polygons(t_d[:df], t_d[:df].cell_prior, grid_step=5.0, bandwidth=5.0)
-@time t_d[:polys] = B.boundary_polygons(t_d[:df], t_d[:df].cell, grid_step=5.0, bandwidth=5.0);
-```
-
-```julia
-t_cd = t_d[:part_cors_prior][2];
-for ci in t_cd[2][sortperm(t_cd[1])[t_cd[3] .> 0.1]][1:5]
-    display(B.plot_comparison_for_cell(t_d[:df], ci, nothing, nothing; paper_polys=t_d[:polys], cell1_col=:cell_prior, cell2_col=:cell, 
-            ms=4.0, bandwidth=5.0, ticks=true, size_mult=1.5))
-end
-```
-
-```julia
-t_cd = t_d[:part_cors_prior][1];
-for ci in t_cd[2][sortperm(t_cd[1])[t_cd[3] .> 0.1]][1:5]
-    display(B.plot_comparison_for_cell(t_d[:df], ci, nothing, nothing; paper_polys=t_d[:prior_polys], cell1_col=:cell, cell2_col=:cell_prior, 
-            ms=4.0, bandwidth=5.0, ticks=true, size_mult=1.5))
-end
-```
-
-```julia
-for ci in t_cd[2][sortperm(t_cd[1])[t_cd[3] .> 0.1]][1:5]
-    display(B.plot_comparison_for_cell(t_d[:df], ci, nothing, nothing; paper_polys=t_d[:prior_polys], cell1_col=:cell_prior, cell2_col=:cell, 
-            ms=4.0, bandwidth=5.0, ticks=true))
-end
-```
-
 ### Supp. plots
 
 
@@ -423,7 +388,7 @@ for (col, lab, ax) in [(:n_transcripts, "Num. of molecules", ax1), (:sqr_area, "
             for d in datasets if ((n in keys(d[:qc_per_cell_dfs])) && (size(d[:qc_per_cell_dfs][n], 1) > 0))] for n in cell_col_names]...)...);
     p_df.Dataset[p_df.Dataset .== "Allen smFISH"] .= "Allen\nsmFISH"
 
-    Sns.boxplot(x=p_df.Dataset, y=p_df.Val, hue=p_df.Segmentation, hue_order=sort(unique(p_df.Segmentation)), palette=color_per_label, fliersize=0.1, ax=ax)
+    Sns.boxplot(x=p_df.Dataset, y=p_df.Val, hue=p_df.Segmentation, hue_order=sort(unique(p_df.Segmentation)), palette=color_per_label, fliersize=0.1, ax=ax, saturation=1)
 
     ax.set_ylabel(lab)
     ax.set_xticklabels(ax.get_xticklabels(), fontsize=10)
@@ -433,10 +398,14 @@ end
 
 ax1.set_yscale("log")
 Plt.tight_layout()
+
+BA.label_axis!.([ax1, ax2], ["a", "b"], x=-0.12, y=1.0)
 Plt.savefig(cplotsdir("cell_stats.pdf"));
 ```
 
+<!-- #region tags=[] -->
 #### Similarity vs Prior Confidence 
+<!-- #endregion -->
 
 ```julia tags=[]
 dir_aliases = Dict(
@@ -461,11 +430,11 @@ p_df2 = vcat([vcat([DataFrame(:Frac => tm.max_overlaps[i][vec(sum(tm.contingency
 p_df2 = @orderby(p_df2, :Confidence);
 
 fig, (ax1, ax2) = Plt.subplots(1, 2, figsize=(9, 4), gridspec_kw=Dict("width_ratios" => [4, 5]))
-ax1.plot(parse.(Float16, p_df.Type), p_df.Val, "o-", lw=3, color="#5200cc", alpha=0.8)
+ax1.plot(parse.(Float16, p_df1.Type), p_df1.Val, "o-", lw=3, color="#5200cc", alpha=0.8)
 ax1.set_ylabel("Mutual Information"); ax1.set_xlabel("Prior segmentation confidence");
 ax1.set_xlim(0, 1.02); ax1.set_ylim(0.8, 0.9);
 
-Sns.boxplot(x=p_df2.Confidence, y=p_df2.Frac, hue=p_df2.Type, palette=color_per_label, fliersize=1, ax=ax2)
+Sns.boxplot(x=p_df2.Confidence, y=p_df2.Frac, hue=p_df2.Type, palette=color_per_label, fliersize=1, ax=ax2, saturation=1)
 ax2.set_ylim(0, 1);
 ax2.legend(title="Source", labelspacing=0.1, loc="lower right")
 ax2.set_xlabel("Prior segmentation confidence"); ax2.set_ylabel("Overlap fraction with\nthe best matching cell");
