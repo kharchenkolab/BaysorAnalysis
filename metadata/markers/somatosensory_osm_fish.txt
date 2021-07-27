@@ -1,0 +1,140 @@
+>Inhibitory
+expressed uniq: Gad2
+not expressed: Tbr1, Rorb, Mfge8, Cpne5, Serpinf1, Plp1
+
+>Excitatory
+expressed: Tbr1, Lamp5, Rorb, Syt6
+not expressed: Mfge8, Mrc1
+
+>Astrocytes
+expressed: Aldoc, Gfap, Serpinf1, Mfge8
+not expressed: Hexb, Lamp5, Mrc1, Sox10, Rorb, Tbr1, Syt6
+
+>Oligodendrocytes
+expressed uniq: Sox10, Pdgfra
+expressed: Plp1, Itpr2, Bmp4, Anln #, Ctps
+not expressed: Hexb, Mrc1, Aldoc, Gfap, Tbr1, Kcnip
+
+>Microglia
+expressed uniq: Hexb
+not expressed: Gad2, Tbr1, Gfap, Mfge8
+
+>Macrophages
+expressed: Mrc1
+not expressed: Rorb, Lamp5, Syt6, Cpne5, Gfap, Mfge8
+
+>Vasculature
+expressed: Flt1, Apln, Vtn, Acta2, Mrc1
+not expressed: Lamp5, Rorb, Sox10, Syt6, Plp1
+
+>Ventricle
+expressed uniq: Ttr, Foxj1
+not expressed: Gad2, Cpne5, Mrc1
+
+>Hippocampus
+expressed: Kcnip
+not expressed: Gad2, Tbr1, Lamp5, Rorb, Slc32a1
+
+## Inhibitory
+
+>Inh Crhbp
+expressed: Crhbp
+subtype of: Inhibitory
+
+>Inh Kcnip
+expressed: Kcnip
+subtype of: Inhibitory
+
+# >Inh Pthlh
+# expressed: Pthlh
+# subtype of: Inhibitory
+
+>Inh Vip
+expressed uniq: Vip
+subtype of: Inhibitory
+
+>Inh Lamp5
+expressed uniq: Lamp5
+subtype of: Inhibitory
+
+## Microglia
+> Micro Mrc1
+expressed uniq: Mrc1
+subtype of: Microglia
+
+> Micro Hexb
+expressed: Hexb
+subtype of: Microglia
+
+## Vasculature
+
+>Vasc Flt1
+expressed: Flt1
+subtype of: Vasculature
+
+>Vasc Vtn
+expressed: Vtn
+subtype of: Vasculature
+
+>Vasc Apln
+expressed: Apln
+subtype of: Vasculature
+
+>Vasc Acta2
+expressed: Acta2
+subtype of: Vasculature
+
+## Excitatory
+
+>L2-3 Ex Lamp5
+expressed: Lamp5
+subtype of: Excitatory
+
+>L3-4 Ex Rorb
+expressed: Rorb
+subtype of: Excitatory
+
+>L5-6 Ex Syt6
+expressed: Syt6
+not expressed: Rorb
+subtype of: Excitatory
+
+>L5-6 Ex Tbr1
+expressed: Tbr1
+not expressed: Lamp5, Rorb
+subtype of: Excitatory
+
+## Oligodendrocytes
+
+# >Oligo Cop
+# expressed: Bmp4
+# subtype of: Oligodendrocytes
+
+>Oligo Precursors
+expressed: Pdgfra
+subtype of: Oligodendrocytes
+
+>Oligo Mature
+expressed uniq: Plp1, Anln
+not expressed: Itpr2, Ctps, Bmp4
+subtype of: Oligodendrocytes
+
+## Ventricle
+
+>Ependymal
+expressed: Foxj1
+subtype of: Ventricle
+
+>C. Plexus
+expressed: Ttr
+subtype of: Ventricle
+
+## Astrocytes
+
+>Astro Mfge8
+expressed uniq: Mfge8
+subtype of: Astrocytes
+
+>Astro Gfap
+expressed: Gfap
+subtype of: Astrocytes

@@ -1,0 +1,104 @@
+# Root
+
+>Astrocyte
+expressed: Aqp4
+
+>Endothelial
+expressed: Fn1
+
+>Ependymal
+expressed: Cd24a
+not expressed: Slc17a6
+
+>Excitatory
+expressed: Slc17a6, Slc17a7
+
+>Inhibitory
+expressed uniq: Gad1
+not expressed: Slc17a6, Slc17a7
+
+>Microglia
+expressed uniq: Selplg
+
+>OD Mature
+expressed uniq: Opalin
+expressed: Ttyh2, Mbp
+not expressed: Aqp4
+
+>OD Immature
+expressed uniq: Pdgfra
+expressed: Mki67
+not expressed: Aqp4
+
+>Pericytes
+expressed uniq: Myh11
+not expressed: Sema3c, Fn1
+
+## Inhibitory
+
+# >Inh_Chat
+# expressed: Chat
+# subtype of: Inhibitory
+# 
+# >Inh_Esr1
+# expressed: Esr1
+# subtype of: Inhibitory
+# 
+# >Inh_Cpne5
+# expressed: Cpne5, Balap2
+# subtype of: Inhibitory
+# 
+# >Inh_Calcr
+# expressed: Calcr, Brs3
+# subtype of: Inhibitory
+# 
+# >Inh_Gabra1
+# expressed: Gabra1, Syt2
+# subtype of: Inhibitory
+# 
+# >Inh_Htr2c
+# expressed: Htr2c, Sox6
+# subtype of: Inhibitory
+# 
+# >Inh_Htr2c
+# expressed: Htr2c, Sox6
+# subtype of: Inhibitory
+
+## Excitatory
+
+# > Ex_Cbln
+# expressed: Cbln1, Cbln2, Fezf1, Bdnf
+# subtype of: Excitatory
+# 
+# > Ex_Ebf3
+# expressed: Ebf3
+# subtype of: Excitatory
+# 
+# > Ex_Necab1
+# expressed: Necab1, Ntng1
+# not expressed: Ebf3
+# subtype of: Excitatory
+
+## Endothelial
+
+>Endothelial 1
+expressed: Igf1r
+subtype of: Endothelial
+
+>Endothelial 2
+expressed: Bmp7, Lepr
+subtype of: Endothelial
+
+>Endothelial 3
+expressed: Ace2
+subtype of: Endothelial
+
+## OD Immature
+
+# >OD Immature 1
+# expressed: Traf4
+# subtype of: OD Immature
+# 
+# >OD Immature 2
+# expressed: Mki67
+# subtype of: OD Immature
