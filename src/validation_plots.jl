@@ -2,7 +2,7 @@ import PyPlot as Plt
 import Seaborn as Sns
 using DataFrames
 
-function plot_precision_recall(pr_dfs::Dict{String, DataFrame}; col::Symbol, color_per_label::Dict{String, String}, xlabel::String,
+function plot_precision_recall(pr_dfs::T where T <: AbstractDict{String, DataFrame}; col::Symbol, color_per_label::Dict{String, String}, xlabel::String,
         ax=Plt.gca(), legend::Bool=true, bins=0.0:0.05:1.0, lw=2, alpha=0.1, legend_title::String="Target", legend_loc::String="best")
     for (k, df) in pr_dfs
         color = color_per_label[k]
@@ -32,4 +32,15 @@ function plot_correlation_violins(datasets::NamedTuple, part_cor_key::Symbol, la
     ax.set_yticks(-1.0:0.5:1.0)
     ax.set_ylabel("Correlation between parts");
     return ax
+end
+
+function plot_cell_type_clustermap(expr_per_clust, gene_names::Vector{String}, gene_subs::Vector{Int}; title::String="",
+        figsize::Tuple{<:Real, <:Real}=(4, 4), width_frac::Float64=0.5, kwargs...)
+    Plt.figure(figsize=(figsize[1] * width_frac, figsize[2]))
+    plt, cell_ord, gene_ord = clustermap(expr_per_clust, gene_names; gene_ord=gene_subs, transpose=true, cmap="OrRd", kwargs...);
+    ax = plt.axes
+    ax.tick_params(axis="both", which="both",length=0)
+    ax.set_xticks([]); ax.set_yticklabels(ax.get_yticklabels(), fontsize=13, rotation=0, va="baseline");
+    ax.set_title(title)
+    return plt
 end

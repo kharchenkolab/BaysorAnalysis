@@ -19,10 +19,12 @@ function assignment_summary_df(assignments::Pair{Symbol, Vector{Int}}...; min_mo
     ))[:, [:name, :n_cells, :noise_frac]]
 end
 
-function plot_subset(df_spatial::DataFrame, dapi_arr::Union{Matrix, Nothing}, (xs, xe), (ys, ye); polygons::Union{Bool, Vector{Matrix{Float64}}}=true, markersize=2.0, alpha=0.2, min_molecules_per_cell::Int=1,
-        grid_step::Float64=5.0, bandwidth::Float64=grid_step, min_border_length=3, cell_col::Symbol=:cell, dapi_alpha=0.9, polygon_line_width::T1 where T1 <: Real=2, dens_threshold::Float64=1e-5,
-        noise::Bool=true, size_mult=1/3, plot_raw_dapi::Bool=true, color_col::Symbol=:ncv_color, annotation_col::Union{Symbol, Nothing}=nothing, build_panel::Bool=true, grid_alpha::Float64=0.5, ticks=false,
-        swap_plots::Bool=false, dapi_color::Symbol=:twilight, clims=nothing, polygon_line_color="black", plot_bg_dapi::Bool=true, kwargs...)
+function plot_subset(df_spatial::DataFrame, dapi_arr::Union{Matrix, Nothing}, (xs, xe), (ys, ye); polygons::Union{Bool, Vector{Matrix{Float64}}}=true,
+        markersize=2.0, alpha=0.2, min_molecules_per_cell::Int=1, grid_step::Float64=5.0, bandwidth::Float64=grid_step, min_border_length=3,
+        cell_col::Symbol=:cell, dapi_alpha=0.9, polygon_line_width::T1 where T1 <: Real=2, dens_threshold::Float64=1e-5, noise::Bool=true,
+        size_mult=1/3, plot_raw_dapi::Bool=true, color_col::Symbol=:ncv_color, annotation_col::Union{Symbol, Nothing}=nothing, build_panel::Bool=true,
+        grid_alpha::Float64=0.5, ticks=false, swap_plots::Bool=false, dapi_color::Symbol=:twilight, clims=nothing, polygon_line_color="black",
+        plot_bg_dapi::Bool=true, title::String="", kwargs...)
     df_subs = @where(df_spatial, :x .>= xs, :x .<= xe, :y .>= ys, :y .<= ye);
 
     if (typeof(polygons) == Bool)
@@ -65,10 +67,11 @@ function plot_subset(df_spatial::DataFrame, dapi_arr::Union{Matrix, Nothing}, (x
 
     fig = MK.Figure(resolution=plot_size)
     get_axis() = ticks ?
-        MK.Axis(fig, xticks=xticks, yticks=yticks) :
-        MK.Axis(fig, xticklabelsvisible=false, xticksvisible=false, yticklabelsvisible=false, yticksvisible=false)
+        MK.Axis(fig, xticks=xticks, yticks=yticks, title=title) :
+        MK.Axis(fig, xticklabelsvisible=false, xticksvisible=false, yticklabelsvisible=false, yticksvisible=false, title=title)
 
-    fig[1, 1] = get_axis()
+    pi1, pi2 = swap_plots ? (2, 1) : (1, 2)
+    fig[1, pi1] = get_axis()
 
     if plot_bg_dapi
         MK.image!(Colors.GrayA.(1 .- dapi_subs ./ maximum(dapi_subs), dapi_alpha), interpolate=false)
@@ -82,20 +85,13 @@ function plot_subset(df_spatial::DataFrame, dapi_arr::Union{Matrix, Nothing}, (x
         return fig
     end
 
-    if clims === nothing
-        clims = B.val_range(dapi_arr)
-    else
-        error("clims are not currently supported")
-    end
-
     # Possible colorschemes: :delta, :twilight, :PuBuGn_9, :PuBu_9, :dense, :tofino, :berlin, :delta
-    fig[1, 2] = get_axis()
-    MK.heatmap!(dapi_subs, colormap=dapi_color)
-     # TODO: p .- [xs ys] after Baysor update
+    fig[1, pi2] = get_axis()
+    hm = MK.heatmap!(dapi_subs, colormap=dapi_color)
     MK.poly!([MK.Point2.(eachrow(p .- [xs ys])) for p in polygons]; color="transparent", polygon_kwargs...)
 
-    if swap_plots
-        fig[1, 1:2] .= fig[1, [2, 1]]
+    if clims !== nothing
+        hm.colorrange = clims
     end
 
     if !build_panel
@@ -106,10 +102,10 @@ function plot_subset(df_spatial::DataFrame, dapi_arr::Union{Matrix, Nothing}, (x
     return fig
 end
 
-# function cell_coord_frame(df_spatial::DataFrame, cell_id::Int; cell_col::Symbol=:cell, offset::Float64=0.1)
-#     sample_df = df_spatial[df_spatial[!, cell_col] .== cell_id,:];
-#     return [round.(Int, ((1. + offset) * s - offset * e, (1. + offset) * e - offset * s)) for (s,e) in [B.val_range(sample_df.x), B.val_range(sample_df.y)]];
-# end
+function cell_coord_frame(df_spatial::DataFrame, cell_id::Int; cell_col::Symbol=:cell, offset::Float64=0.1)
+    sample_df = df_spatial[df_spatial[!, cell_col] .== cell_id,:];
+    return [round.(Int, ((1. + offset) * s - offset * e, (1. + offset) * e - offset * s)) for (s,e) in [B.val_range(sample_df.x), B.val_range(sample_df.y)]];
+end
 
 function plot_comparison_for_cell(df_spatial::DataFrame, cell_id::Int, args...; cell1_col::Symbol=:cell, cell2_col::Symbol=:cell_paper, offset::Float64=0.1, kwargs...)
     sample_df = df_spatial[df_spatial[!, cell1_col] .== cell_id,:];
@@ -184,11 +180,17 @@ prepare_qc_df(df_spatial::DataFrame, cell_col::Symbol=:cell; kwargs...) =
 
 
 function prepare_qc_df(df_spatial::DataFrame, assignment::Vector{<:Int}; min_area::T where T<:Real, min_molecules_per_cell::T2 where T2 <: Real,
-        max_elongation::T3 where T3 <: Real = 30.0, dapi_arr::Union{Matrix{<:Real}, Nothing}=nothing)
+        max_molecules_per_cell::Int=0, max_elongation::T3 where T3 <: Real = 30.0, dapi_arr::Union{Matrix{<:Real}, Nothing}=nothing)
     qc_per_cell = B.get_cell_qc_df(df_spatial, assignment, dapi_arr=dapi_arr);
     qc_per_cell[!, :cell_id] = 1:size(qc_per_cell, 1)
     qc_per_cell[!, :sqr_area] = sqrt.(qc_per_cell.area)
-    return @where(qc_per_cell, :n_transcripts .>= min_molecules_per_cell, :sqr_area .>= min_area, :elongation .<= max_elongation)
+
+    if max_molecules_per_cell == 0
+        max_molecules_per_cell = maximum(qc_per_cell.n_transcripts)
+    end
+
+    return @where(qc_per_cell, :n_transcripts .>= min_molecules_per_cell, :n_transcripts .<= max_molecules_per_cell,
+        :sqr_area .>= min_area, :elongation .<= max_elongation)
 end
 
 hist_bins(vals::Vector{<:Real}...; n_bins::Int=100, min_val::T where T<: Real=0.0, m_quantile::T2 where T2<:Real=0.99, max_val_mult::Float64=1.0) =
@@ -338,8 +340,11 @@ function plot_qc_embeddings(qc_per_cell_dfs::Union{Array{DataFrame, 1}, Tuple{Da
     return Plots.plot(plts..., size=size, format=:png, layout=something(layout, length(plts)))
 end
 
+plot_expression_vec_comparison(df_spatial::DataFrame, qc_per_cell_dfs::Dict{Symbol, DataFrame}, gene_names; labels=["Baysor", "DAPI"], kwargs...) =
+    B.plot_expression_vectors([B.count_array(vcat(B.split(df_spatial.gene, df_spatial[!, cs] .+ 1)[2:end][qdf.cell_id]...)) for (cs, qdf) in qc_per_cell_dfs]...; gene_names=gene_names, labels=labels, kwargs...)
+
 plot_expression_vec_comparison(df_spatial::DataFrame, qc_per_cell_dfs::Union{Array{DataFrame, 1}, Tuple{DataFrame, DataFrame}}, cell_cols::Vector{Symbol}, gene_names; labels=["Baysor", "DAPI"], kwargs...) =
-    plot_expression_vectors([B.count_array(vcat(split(df_spatial.gene, df_spatial[!, cs] .+ 1)[2:end][qdf.cell_id]...)) for (cs, qdf) in zip(cell_cols, qc_per_cell_dfs)]...; gene_names=gene_names, labels=labels, kwargs...)
+    B.plot_expression_vectors([B.count_array(vcat(B.split(df_spatial.gene, df_spatial[!, cs] .+ 1)[2:end][qdf.cell_id]...)) for (cs, qdf) in zip(cell_cols, qc_per_cell_dfs)]...; gene_names=gene_names, labels=labels, kwargs...)
 
 function estimate_non_matching_part_correlation(df_spatial::DataFrame, qc_per_cell_dfs::Union{Array{DataFrame, 1}, Tuple{DataFrame, DataFrame}},
         match_res::NamedTuple; cell_cols::Vector{Symbol}=[:cell, :cell_paper], rev::Bool=false, max_overlap_borders::Tuple{Float64, Float64}=(0.25, 0.75))
@@ -410,7 +415,7 @@ function append_matching_statistics!(d::Dict{Symbol, Any}, cell_col_names::Vecto
     end
 
     d[:qc_per_cell_dfs] = Dict(k => prepare_qc_df(d[:df], k; min_area=d[:min_area],
-        min_molecules_per_cell=d[:min_mols_per_cell], max_elongation=15) for k in cur_names);
+        min_molecules_per_cell=d[:min_mols_per_cell], max_molecules_per_cell=get(d, :max_mols_per_cell, 0), max_elongation=15) for k in cur_names);
 
     for cs in cur_names # filter cells
         d[:df][!, cs][.!in.(d[:df][!, cs], Ref(Set(d[:qc_per_cell_dfs][cs].cell_id)))] .= 0

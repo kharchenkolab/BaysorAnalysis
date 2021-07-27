@@ -104,7 +104,7 @@ load_osmfish(; min_area::Float64=70.0, kwargs...) =
 
 load_starmap1020(; min_area::Float64=25.0, kwargs...) =
     load_dataset(
-        "exp_pro/starmap_vis1020/baysor_cl0/segmentation.csv",
+        "exp_pro/starmap_vis1020/baysor/segmentation.csv",
         "exp_raw/starmap_vis1020/segmentation.tiff",
         "", "",
         "exp_pro/starmap_vis1020/baysor_prior/segmentation.csv";

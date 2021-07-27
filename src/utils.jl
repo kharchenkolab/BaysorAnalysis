@@ -31,12 +31,12 @@ end
 function method_palette(subs::Union{Vector{String}, Nothing}=nothing)
     d = Dict(
         "Baysor" => "#E69F00",
-        "Watershed" => "#56B4E9",
-        "pciSeq" => "#009E73",
+        "Watershed" => "#3093ca",
+        "pciSeq" => "#1e9e00",
         "poly-A" => "#F0E442",
         "IF" => "#CC79A7",
         "Baysor, DAPI prior" => "#9566FF",
-        "Baysor, IF prior" => "#759500"
+        "Baysor, IF prior" => "#6F4D0B"
     )
 
     (subs !== nothing) || return d
@@ -49,4 +49,23 @@ function set_pyplot_defaults!()
     Plt.rc("font", size=12)
     Plt.rc("grid", alpha=0.25)
     Plt.rc("legend", frameon=false, borderpad=0)
+end
+
+function upscale(image::T where T <: AbstractMatrix{TR}, ratio::Int64) where TR <: Real
+    res_img = zeros(TR, size(image) .* ratio)
+    ct = 1
+    for c in 1:size(image, 2)
+        for m1 in 1:ratio
+            rt = 1
+            for r in 1:size(image, 1)
+                for m2 in 1:ratio
+                    res_img[rt, ct] = image[r, c]
+                    rt += 1
+                end
+            end
+            ct += 1
+        end
+    end
+
+    return res_img
 end
