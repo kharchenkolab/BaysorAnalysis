@@ -27,18 +27,23 @@ readCounts <- function(path, gene_names) {
     set_rownames(gene_names) %>% 
     as("dgCMatrix") %>% .[sort(gene_names),]
 }
+
+plotDir <- function(...) file.path("../../plots/segmentation_free/allen_smfish/", ...)
 ```
 
 ```{r, message=FALSE}
-gene_names <- read_csv("../cache/allen_gene_names.csv")$gene
+gene_names <- read_csv("../../cache/allen_gene_names.csv")$gene
 
-cms <- list.files("../cache/", pattern="allen_neighb_sample_(\\d)+.mm") %>% 
-  file.path("../cache", .) %>% setNames(gsub(".mm", "", substr(., 30, 100))) %>% 
+cms <- list.files("../../cache/", pattern="allen_neighb_sample_(\\d)+.mm") %>% 
+  file.path("../../cache", .) %>% setNames(gsub(".mm", "", substr(., 30, 100))) %>% 
   pblapply(readCounts, gene_names)
+
+cm <- readCounts("../../cache/allen_neighb_50_manual_subs.mm", gene_names)
 ```
 
 ```{r}
-p2_lv <- GetPagoda(cms$`50`, n.cores=5, min.transcripts.per.cell=1, log.scale=F, graph.k=50, n.odgenes=0,
+# p2_lv <- GetPagoda(cms$le_50, n.cores=5, min.transcripts.per.cell=1, log.scale=F, graph.k=50, n.odgenes=0,
+p2_lv <- GetPagoda(cm, n.cores=5, min.transcripts.per.cell=1, log.scale=F, graph.k=50, n.odgenes=0,
                    n.pcs=0, embeding.type="UMAP_graph", min.dist=0.3)
 p2_lv$getKnnClusters(method=leiden.community, resolution=8, n.iterations=15, name="leiden_hr")
 ```
@@ -53,15 +58,20 @@ cowplot::plot_grid(
 ## Annotation
 
 ```{r}
-cm_norm <- normalizeTfIdfWithFeatures(cms$`50`)
+# cm_norm <- normalizeTfIdfWithFeatures(cms$le_50)
+cm_norm <- normalizeTfIdfWithFeatures(cm)
 ```
 
 ```{r, fig.width=8, fig.height=8}
-clf_data <- getClassificationData(cm_norm, "../metadata/visp_allen_sm_fish.md", prenormalized=T)
+clf_data <- getClassificationData(cm_norm, "../../metadata/visp_allen_sm_fish.md", prenormalized=T)
 ann_by_level <- assignCellsByScores(NULL, clf_data, clusters=p2_lv$clusters$counts$leiden_hr)
 ann_by_level$annotation$l1[ann_by_level$annotation$l3 == "Noise"] <- "Noise"
 
 plotAnnotationByLevels(p2_lv$embeddings$counts, ann_by_level$annotation, size=0.2, font.size=c(2, 4), shuffle.colors=T, min.cluster.size=10)
+```
+
+```{r}
+write_csv(as.data.frame(ann_by_level$annotation), "../../cache/allen_neighb_50_annotation.csv")
 ```
 
 ```{r}
@@ -78,7 +88,7 @@ l3_colors <- sample(scales::hue_pal(h=c(50, 360), c=100, l=60)(length(unique(l3_
 sccore::embeddingPlot(p2_lv$embeddings$counts$UMAP_graph, ann_by_level$annotation$l3, raster=T, 
                       raster.dpi=120, font.size=c(5, 12)) +
   scale_color_manual(values=l3_colors)
-ggsave("./plots/allen_sm_fish/annotation.pdf")
+ggsave(plotDir("annotation.pdf"))
 ```
 
 ```{r, fig.width=5, fig.height=1.5, message=FALSE, warning=FALSE}
@@ -89,7 +99,7 @@ gg <- sccore::embeddingPlot(p2_lv$embeddings$counts$UMAP_graph, ann_by_level$ann
   theme(legend.text=element_text(size=14), legend.title=element_text(size=16))
 
 cowplot::plot_grid(cowplot::get_legend(gg))
-ggsave("./plots/allen_sm_fish/color_legend_l2.pdf")
+ggsave(plotDir("color_legend_l2.pdf"))
 ```
 
 ```{r, fig.width=1.5, fig.height=1, message=FALSE, warning=FALSE}
@@ -101,22 +111,23 @@ gg <- sccore::embeddingPlot(p2_lv$embeddings$counts$UMAP_graph, ann_by_level$ann
   theme(legend.text=element_text(size=14), legend.title=element_text(size=16))
 
 cowplot::plot_grid(cowplot::get_legend(gg))
-ggsave("./plots/allen_sm_fish/color_legend_l1.pdf")
+ggsave(plotDir("color_legend_l1.pdf"))
 ```
 
 ```{r, fig.width=10, fig.height=10, message=FALSE}
-coord_df <- read_csv("../cache/allen_coord_df.csv") %>% as.data.frame() %>% 
+coord_df <- read_csv("../../cache/allen_coord_df.csv") %>% as.data.frame() %>% 
   set_rownames(names(ann_by_level$annotation$l3))
 
 sccore::embeddingPlot(coord_df, groups=ann_by_level$annotation$l3, 
-              subgroups=unique(ann_by_level$annotation$l3[(ann_by_level$annotation$l1 == "Ex") & (ann_by_level$annotation$l3 != "Noise")]), size=1.5,
-              show.legend=T, shuffle.colors=T, legend.position=c(0.99, 0.99), raster=T, raster.dpi=120, font.size=c(5, 10)) +
+              # subgroups="Noise",
+              subgroups=unique(ann_by_level$annotation$l3[(ann_by_level$annotation$l1 == "Ex") | (ann_by_level$annotation$l3 == "Noise")]),
+              size=1.5, show.legend=T, shuffle.colors=T, legend.position=c(0.99, 0.99), raster=T, raster.dpi=120, font.size=c(5, 10)) +
   scale_x_continuous(limits=c(10000, 20000), expand=c(0, 0)) + 
   scale_y_continuous(limits=c(4000, 14000), expand=c(0, 0)) + 
   scale_color_manual(name="Type", values=l3_colors) +
   guides(color=guide_legend(label.theme=element_text(size=14), override.aes=list(size=3, alpha=1), title.theme=element_text(size=16)))
 
-ggsave("./plots/allen_sm_fish/annotation_ex_space.pdf")
+ggsave(plotDir("annotation_ex_space.pdf"))
 ```
 
 ```{r}
