@@ -1,6 +1,5 @@
 .Rhistory
 .Rproj.user/
-*.ipynb
 *.nb.html
 
 .ipynb_checkpoints
