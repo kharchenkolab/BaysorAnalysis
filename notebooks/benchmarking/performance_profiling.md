@@ -6,15 +6,19 @@ jupyter:
       extension: .md
       format_name: markdown
       format_version: '1.2'
-      jupytext_version: 1.4.1
+      jupytext_version: 1.9.1
   kernelspec:
-    display_name: Julia 1.3.1
+    display_name: Julia 1.6.0
     language: julia
-    name: julia-1.3
+    name: julia-1.6
 ---
 
-```julia execution={"iopub.execute_input": "2020-09-30T18:33:32.842000+02:00", "iopub.status.busy": "2020-09-30T18:33:32.842000+02:00", "iopub.status.idle": "2020-09-30T18:33:32.892000+02:00"}
-import Baysor
+```julia tags=[]
+using DrWatson
+quickactivate(@__DIR__)
+
+import Baysor as B
+import BaysorAnalysis as BA
 import Colors
 import CSV
 import MultivariateStats
@@ -22,42 +26,44 @@ import Plots
 
 using BenchmarkTools
 using ProgressMeter
+using OrderedCollections
 using DataFrames
 using DataFramesMeta
 using NearestNeighbors
 using Statistics
 using StatsBase
-
-B = Baysor;
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-30T16:01:33.073000+02:00", "iopub.status.busy": "2020-09-30T16:01:33.073000+02:00", "iopub.status.idle": "2020-09-30T16:01:33.179000+02:00"}
+```julia tags=[]
 BenchmarkTools.DEFAULT_PARAMETERS.gcsample = true;
 BenchmarkTools.DEFAULT_PARAMETERS.overhead = BenchmarkTools.estimate_overhead();
 BenchmarkTools.DEFAULT_PARAMETERS.samples = 5;
 BenchmarkTools.DEFAULT_PARAMETERS.seconds = 30 * 60;
 ```
 
+<!-- #region heading_collapsed="true" tags=[] -->
 ## Load data
+<!-- #endregion -->
 
-```julia execution={"iopub.execute_input": "2020-09-25T19:13:42.517000+02:00", "iopub.status.busy": "2020-09-25T19:13:42.517000+02:00", "iopub.status.idle": "2020-09-25T19:13:51.412000+02:00"}
+```julia
 # @time df_spatial, gene_names = Baysor.load_df("../run_results/spacejam2/allen_sm_fish/no_dapi/segmentation.csv");
 # df_spatial[!, :x] = round.(Int, 10 .* (df_spatial.x .- minimum(df_spatial.x)));
 # df_spatial[!, :y] = round.(Int, 10 .* (df_spatial.y .- minimum(df_spatial.y)));
 # length(gene_names)
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-30T16:01:11.758000+02:00", "iopub.status.busy": "2020-09-30T16:01:11.758000+02:00", "iopub.status.idle": "2020-09-30T16:01:22.250000+02:00"}
+```julia
 @time df_spatial, gene_names = Baysor.load_df("../run_results/merfish_moffit/segmentation.csv");
 length(gene_names)
 ```
 
+<!-- #region heading_collapsed="true" tags=[] -->
 ## Molecule clustering
-
+<!-- #endregion -->
 
 ### Baysor
 
-```julia execution={"iopub.execute_input": "2020-09-30T16:03:23.529000+02:00", "iopub.status.busy": "2020-09-30T16:03:23.529000+02:00", "iopub.status.idle": "2020-09-30T16:03:23.667000+02:00"}
+```julia
 bench_df = @where(df_spatial, :x .< -3300, :y .< -3300) |> deepcopy;
 gn_bench = gene_names;
 
@@ -67,48 +73,48 @@ confidence_nn_id = Baysor.default_param_value(:confidence_nn_id, 50);
 size(bench_df, 1)
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-30T16:03:26.244000+02:00", "iopub.status.busy": "2020-09-30T16:03:26.244000+02:00", "iopub.status.idle": "2020-09-30T16:03:26.270000+02:00"}
+```julia
 bench_clust = BenchmarkGroup();
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-30T16:03:28.730000+02:00", "iopub.status.busy": "2020-09-30T16:03:28.730000+02:00", "iopub.status.idle": "2020-09-30T16:03:42.956000+02:00"}
+```julia
 B.append_confidence!(bench_df, nn_id=confidence_nn_id);
 bench_clust["confidence"] = @benchmarkable B.append_confidence!($bench_df, nn_id=$confidence_nn_id);
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-30T16:03:44.226000+02:00", "iopub.status.busy": "2020-09-30T16:03:44.225000+02:00", "iopub.status.idle": "2020-09-30T16:03:47.559000+02:00"}
+```julia
 adjacent_points, adjacent_weights = B.build_molecule_graph(bench_df, filter=false);
 bench_clust["mol_graph"] = @benchmarkable B.build_molecule_graph($bench_df, filter=false);
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-30T16:03:48.816000+02:00", "iopub.status.busy": "2020-09-30T16:03:48.816000+02:00", "iopub.status.idle": "2020-09-30T16:03:49.105000+02:00"}
+```julia
 for cl in [2, 4, 6, 8, 10]
     bench_clust["clust_$cl"] = @benchmarkable B.cluster_molecules_on_mrf($bench_df.gene, $adjacent_points, $adjacent_weights, $bench_df.confidence; 
         n_clusters=$cl, max_iters=5000, n_iters_without_update=100, verbose=false);
 end
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-30T16:03:55.130000+02:00", "iopub.status.busy": "2020-09-30T16:03:55.129000+02:00", "iopub.status.idle": "2020-09-30T16:45:10.393000+02:00"}
+```julia
 bench_clust_res = run(bench_clust)
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-30T16:45:10.393000+02:00", "iopub.status.busy": "2020-09-30T16:45:10.393000+02:00", "iopub.status.idle": "2020-09-30T16:45:13.603000+02:00"}
+```julia
 bench_res_df = vcat([DataFrame("Key" => k, "Mean time, sec" => mean(v.times) ./ 1e9, "Std time, sec" => std(v.times) ./ 1e9, 
             "Num. samples" => length(v.times)) for (k,v) in bench_clust_res]...)
 ```
 
 ### Leiden
 
-```julia execution={"iopub.execute_input": "2020-09-30T16:48:24.599000+02:00", "iopub.status.busy": "2020-09-30T16:48:24.599000+02:00", "iopub.status.idle": "2020-09-30T16:48:28.032000+02:00"}
+```julia
 using RCall
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-30T16:48:36.046000+02:00", "iopub.status.busy": "2020-09-30T16:48:35.550000+02:00", "iopub.status.idle": "2020-09-30T16:48:38.775000+02:00"}
+```julia
 nm_bench = B.neighborhood_count_matrix(bench_df, 50, normalize=false);
 size(nm_bench)
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-30T16:48:44.712000+02:00", "iopub.status.busy": "2020-09-30T16:48:44.711000+02:00", "iopub.status.idle": "2020-09-30T17:12:26.341000+02:00"}
+```julia
 R"""
 library(pagoda2)
 library(conos)
@@ -137,15 +143,15 @@ b <- microbenchmark(
 
 ### Aggregate
 
-```julia execution={"iopub.execute_input": "2020-09-30T17:12:26.341000+02:00", "iopub.status.busy": "2020-09-30T17:12:26.341000+02:00", "iopub.status.idle": "2020-09-30T17:12:26.870000+02:00"}
+```julia
 leiden_times = rcopy(R"b").time;
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-30T17:12:26.870000+02:00", "iopub.status.busy": "2020-09-30T17:12:26.870000+02:00", "iopub.status.idle": "2020-09-30T17:12:27.046000+02:00"}
+```julia
 bench_res_df
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-30T17:12:27.046000+02:00", "iopub.status.busy": "2020-09-30T17:12:27.046000+02:00", "iopub.status.idle": "2020-09-30T17:12:28.091000+02:00"}
+```julia
 df1 = hcat(DataFrame("Method" => "MRF", "Num. clusters" => 2:2:10), bench_res_df[[3, 1, 5, 4, 2],2:end]);
 df2 = vcat(df1, DataFrame("Method" => "Leiden", "Num. clusters" => "Any", "Mean time, sec" => mean(leiden_times) / 1e9, 
         "Std time, sec" => std(leiden_times) / 1e9, "Num. samples" => 5));
@@ -154,47 +160,51 @@ df2[:, 3:4] .= round.(df2[:, 3:4], digits=2);
 df2
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-30T18:33:38.579000+02:00", "iopub.status.busy": "2020-09-30T18:33:38.578000+02:00", "iopub.status.idle": "2020-09-30T18:33:39.563000+02:00"}
+```julia
 CSV.write("plots/clustering_profiling.csv", df2)
 ```
 
+<!-- #region heading_collapsed="true" tags=[] -->
 ## Color embedding
+<!-- #endregion -->
 
-```julia execution={"iopub.execute_input": "2020-09-25T19:15:31.459000+02:00", "iopub.status.busy": "2020-09-25T19:15:31.459000+02:00", "iopub.status.idle": "2020-09-25T19:17:12.818000+02:00"}
+```julia
 @time neighb_cm = B.neighborhood_count_matrix(df_spatial, 40);
 @time color_transformation = B.gene_composition_transformation(neighb_cm, df_spatial.confidence; sample_size=20000, spread=2.0, min_dist=0.1);
 @time color_emb = B.transform(color_transformation, neighb_cm);
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-25T19:17:12.818000+02:00", "iopub.status.busy": "2020-09-25T19:17:12.818000+02:00", "iopub.status.idle": "2020-09-25T19:17:12.845000+02:00"}
+```julia
 bench_emb = BenchmarkGroup();
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-25T19:17:12.845000+02:00", "iopub.status.busy": "2020-09-25T19:17:12.845000+02:00", "iopub.status.idle": "2020-09-25T19:17:13.396000+02:00"}
+```julia
 bench_emb["neighborhood_count_matrix_40"] = @benchmarkable B.neighborhood_count_matrix($df_spatial, 40)
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-25T19:17:13.396000+02:00", "iopub.status.busy": "2020-09-25T19:17:13.396000+02:00", "iopub.status.idle": "2020-09-25T19:17:13.734000+02:00"}
+```julia
 bench_emb["gene_composition_transformation_20k"] = @benchmarkable B.gene_composition_transformation(neighb_cm, df_spatial.confidence; 
     sample_size=20000, spread=2.0, min_dist=0.1)
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-25T19:17:13.735000+02:00", "iopub.status.busy": "2020-09-25T19:17:13.735000+02:00", "iopub.status.idle": "2020-09-25T19:17:13.967000+02:00"}
+```julia
 bench_emb["transform"] = @benchmarkable B.transform(color_transformation, neighb_cm)
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-25T19:17:13.967000+02:00", "iopub.status.busy": "2020-09-25T19:17:13.967000+02:00", "iopub.status.idle": "2020-09-25T19:25:23.992000+02:00"}
+```julia
 bench_emb_res = run(bench_emb)
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-25T19:41:41.973000+02:00", "iopub.status.busy": "2020-09-25T19:41:41.973000+02:00", "iopub.status.idle": "2020-09-25T19:41:42.607000+02:00"}
+```julia
 bench_df = vcat([DataFrame("Key" => k, "Mean time, sec" => mean(v.times) ./ 1e9, "Std time, sec" => std(v.times) ./ 1e9, 
             "Num. samples" => length(v.times)) for (k,v) in bench_emb_res]...)
 ```
 
+<!-- #region heading_collapsed="true" tags=[] -->
 ## Segmentation
+<!-- #endregion -->
 
-```julia execution={"iopub.execute_input": "2020-09-10T13:57:52.073000+02:00", "iopub.status.busy": "2020-09-10T13:57:52.073000+02:00", "iopub.status.idle": "2020-09-10T13:57:52.106000+02:00"}
+```julia
 bench_segmentation = BenchmarkGroup();
 ```
 
@@ -232,16 +242,19 @@ B.plot_comparison_for_cell(cur_df, B.val_range(cur_df.x), B.val_range(cur_df.y),
     ms=2.0, bandwidth=5.0, size_mult=0.25, plot_raw_dapi=false)
 ```
 
+<!-- #region heading_collapsed="true" tags=[] -->
 ## Full run
+<!-- #endregion -->
 
-
+<!-- #region heading_collapsed="true" tags=[] -->
 ### Run
+<!-- #endregion -->
 
-```julia execution={"iopub.execute_input": "2020-09-28T10:27:13.345000+02:00", "iopub.status.busy": "2020-09-28T10:27:13.345000+02:00", "iopub.status.idle": "2020-09-28T10:27:13.369000+02:00"}
+```julia
 using ProgressMeter
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-28T10:28:06.250000+02:00", "iopub.status.busy": "2020-09-28T10:28:06.249000+02:00", "iopub.status.idle": "2020-09-28T10:28:06.390000+02:00"}
+```julia
 dataset_paths = "/home/vpetukhov/spatial/Benchmarking/run_results/" .* 
     ["iss_hippo/ca1_no_prior", "merfish_moffit", "osm_fish", "star_map/vis_1020_cl0", "spacejam2/allen_sm_fish/no_dapi"];
 param_dumps = dataset_paths .* "/segmentation_params.dump";
@@ -251,7 +264,7 @@ dataset_names = ["iss", "merfish", "osm_fish", "starmap_1020", "allen_smfish"];
 param_strings = [open(p) do f readlines(f)[1][16:end-1] end for p in param_dumps];
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-21T22:18:50.630000+02:00", "iopub.status.busy": "2020-09-21T22:18:50.630000+02:00", "iopub.status.idle": "2020-09-22T08:31:29.601000+02:00"}
+```julia
 baysor_path = "/home/vpetukhov/local/bin/baysor";
 for i in 2:length(param_strings)
 # for i in 2:2
@@ -272,9 +285,11 @@ for i in 2:length(param_strings)
 end
 ```
 
+<!-- #region heading_collapsed="true" tags=[] -->
 ### Summarize
+<!-- #endregion -->
 
-```julia execution={"iopub.execute_input": "2020-09-28T10:29:43.277000+02:00", "iopub.status.busy": "2020-09-28T10:29:43.277000+02:00", "iopub.status.idle": "2020-09-28T10:29:46.463000+02:00"}
+```julia
 using DataFrames
 using Statistics
 
@@ -284,7 +299,7 @@ seg_results = dataset_paths .* "/segmentation.csv";
 dataset_parameters = hcat([[size(df, 1), length(unique(df.gene))] for df in DataFrame!.(CSV.File.(seg_results))]...);
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-28T10:30:19.418000+02:00", "iopub.status.busy": "2020-09-28T10:30:19.418000+02:00", "iopub.status.idle": "2020-09-28T10:30:19.696000+02:00"}
+```julia
 bench_vals = [hcat(split.(readlines("./profiling_output/$ds.prof"), ' ')...) for ds in dataset_names];
 mem_vals = hcat([parse.(Float64, x[4,:]) / 1e6 for x in bench_vals]...);
 cpu_vals = hcat([parse.(Float64, x[1,:]) / 60 for x in bench_vals]...);
@@ -295,36 +310,31 @@ bench_df = DataFrame("Dataset" => printed_names, "Num. molecules" => dataset_par
     "CPU time, min" => bench_strs[1], "Max RSS, GB" => bench_strs[2], "Num. samples" => 5)
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-28T10:30:40.543000+02:00", "iopub.status.busy": "2020-09-28T10:30:40.543000+02:00", "iopub.status.idle": "2020-09-28T10:30:40.623000+02:00"}
+```julia
 CSV.write("./plots/segmentation_profiling.csv", bench_df)
 ```
 
 ## Parameter table
 
-```julia execution={"iopub.execute_input": "2020-09-25T18:48:41.034000+02:00", "iopub.status.busy": "2020-09-25T18:48:41.034000+02:00", "iopub.status.idle": "2020-09-25T18:48:42.505000+02:00"}
+```julia tags=[]
 import Pkg: TOML
 using DataFrames
 import CSV
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-25T18:48:42.645000+02:00", "iopub.status.busy": "2020-09-25T18:48:42.505000+02:00", "iopub.status.idle": "2020-09-25T18:48:43.059000+02:00"}
-param_dumps = "/home/vpetukhov/spatial/Benchmarking/run_results/" .* [
-    "merfish_moffit", "merfish_moffit_prior", 
-    "osm_fish", "osm_fish/paper_prior",
-    "star_map/vis_1020_cl0", "star_map/vis_1020_prior_cl0",
-    "spacejam2/allen_sm_fish/no_dapi", "spacejam2/allen_sm_fish/mask_prior",
-    "iss_hippo/ca1_no_prior", "iss_hippo/ca1_paper_prior"
-    ] .* "/segmentation_params.dump";
+```julia
+data_paths = ["Allen smFISH" => "allen_smfish", "ISS" => "iss_hippo", "osmFISH" => "osmfish", "STARmap 1020" => "starmap_vis1020", "MERFISH Hypothalamus" => "merfish_moffit", "MERFISH Gut" => "merfish_membrane"];
+prior_subfolders = ["No" => "baysor", "Paper" => "baysor_prior", "DAPI" => "baysor_dapi_prior", "Membrane" => "baysor_membrane_prior"];
 
-dataset_names = repeat(["MERFISH", "osmFISH", "STARmap 1020", "Allen smFISH", "ISS"], inner=2);
-
-p_keys = ["gene-composition-neigborhood", "scale", "prior-segmentation-confidence", 
-    "min-molecules-per-gene", "min-molecules-per-cell", "n-clusters"];
+p_keys = ["gene-composition-neigborhood", "scale", "prior-segmentation-confidence", "min-molecules-per-gene", "min-molecules-per-cell", "n-clusters", 
+    "iters", "force-2d", "x-column", "y-column", "z-column", "gene-column", "prior_segmentation", "nuclei-genes", "cyto-genes"];
 ```
 
-```julia execution={"iopub.execute_input": "2020-09-25T18:48:43.059000+02:00", "iopub.status.busy": "2020-09-25T18:48:43.059000+02:00", "iopub.status.idle": "2020-09-25T18:48:45.887000+02:00"}
-param_dicts = [Dict(k => get(d, k, "NA") for k in p_keys) for d in TOML.parsefile.(param_dumps)]
-param_df = hcat(DataFrame("Dataset" => dataset_names, "Prior" => repeat(["No", "Yes"], outer=5)), vcat(DataFrame.(param_dicts)...));
+```julia
+path_df = DataFrame([Dict(:Dataset => d, :Prior => pr, :Path => datadir("exp_pro", md, sd, "segmentation_params.dump")) for (d, md) in data_paths for (pr, sd) in prior_subfolders]);
+path_df = path_df[isfile.(path_df.Path),:];
 
-CSV.write("plots/parameters.csv", param_df)
+param_dicts = [OrderedDict(k => get(d, k, "NA") for k in p_keys) for d in TOML.parsefile.(path_df.Path)];
+param_df = hcat(path_df[:,[:Dataset, :Prior]], vcat(DataFrame.(param_dicts)...))
+CSV.write(plotsdir("parameters.csv"), param_df)
 ```
